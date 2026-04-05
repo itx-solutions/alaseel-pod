@@ -1,0 +1,160 @@
+"use client";
+
+import { UserButton } from "@clerk/nextjs";
+import {
+  ClipboardList,
+  LayoutDashboard,
+  Mail,
+  Menu,
+  Package,
+  Settings,
+  Truck,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
+
+const MAZATI = "#51836D";
+
+const nav = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/orders", label: "Orders", icon: Package },
+  { href: "/dashboard/drivers", label: "Drivers", icon: Truck },
+  { href: "/dashboard/pods", label: "POD Records", icon: ClipboardList },
+  { href: "/dashboard/email-queue", label: "Email Queue", icon: Mail },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+] as const;
+
+function isActive(pathname: string, href: string) {
+  if (href === "/dashboard") {
+    return pathname === "/dashboard" || pathname === "/dashboard/";
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function NavLinks({
+  pathname,
+  iconOnly,
+  onNavigate,
+}: {
+  pathname: string;
+  iconOnly?: boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav className="flex flex-col gap-0.5 p-2" aria-label="Main">
+      {nav.map(({ href, label, icon: Icon }) => {
+        const active = isActive(pathname, href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors",
+              active &&
+                "border-l-[3px] bg-gray-100 text-gray-900 shadow-sm",
+              !active && "border-l-[3px] border-transparent",
+            )}
+            style={
+              active
+                ? { borderLeftColor: MAZATI }
+                : { borderLeftColor: "transparent" }
+            }
+          >
+            <Icon
+              className={cn(
+                "size-5 shrink-0",
+                active ? "text-gray-900" : "text-gray-500",
+              )}
+              aria-hidden
+            />
+            {!iconOnly ? <span>{label}</span> : <span className="sr-only">{label}</span>}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Desktop sidebar — 240px */}
+      <aside
+        className="hidden w-[240px] shrink-0 flex-col border-r border-gray-200 bg-white lg:flex"
+        aria-label="Sidebar"
+      >
+        <div className="border-b border-gray-200 px-4 py-4">
+          <span className="text-base font-semibold text-gray-900">Mazati POD</span>
+        </div>
+        <NavLinks pathname={pathname} />
+      </aside>
+
+      {/* Tablet icon rail — 768px–1023px */}
+      <aside
+        className="hidden w-16 shrink-0 flex-col border-r border-gray-200 bg-white md:flex lg:hidden"
+        aria-label="Sidebar icons"
+      >
+        <div className="flex h-14 items-center justify-center border-b border-gray-200">
+          <span className="text-xs font-bold text-[#51836D]" aria-hidden>
+            M
+          </span>
+        </div>
+        <NavLinks pathname={pathname} iconOnly />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-gray-200 bg-white px-4 md:px-6">
+          <div className="flex items-center gap-3 lg:hidden">
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="md:hidden"
+                  aria-label="Open menu"
+                >
+                  <Menu className="size-5 text-gray-700" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[260px] p-0">
+                <SheetHeader className="border-b border-gray-200 px-4 py-4 text-left">
+                  <SheetTitle className="text-base font-semibold">
+                    Mazati POD
+                  </SheetTitle>
+                </SheetHeader>
+                <NavLinks
+                  pathname={pathname}
+                  onNavigate={() => setMobileOpen(false)}
+                />
+              </SheetContent>
+            </Sheet>
+            <span className="font-semibold text-gray-900 lg:hidden">
+              Mazati POD
+            </span>
+          </div>
+          <div className="hidden flex-1 lg:block" />
+          <UserButton />
+        </header>
+
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 md:px-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

@@ -47,7 +47,7 @@ Read the relevant section of the spec before implementing any feature. If the sp
 ### Other Services
 - **Object Storage**: Cloudflare R2 (signatures and delivery photos)
 - **Email**: Resend (transactional emails)
-- **Styling**: Tailwind CSS v3 + shadcn/ui
+- **Styling**: Tailwind CSS v4 + shadcn/ui
 - **Icons**: Lucide React exclusively — no other icon libraries
 - **Font**: Inter (Google Fonts)
 
