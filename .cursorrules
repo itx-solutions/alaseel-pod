@@ -1,0 +1,473 @@
+# alaseel-pod — Cursor Rules v1.0
+
+## Critical: Read This First
+
+This is a greenfield Proof of Delivery (POD) platform for Mazati / Al Aseel Food Services.
+It is built for a fleet of 6–20 drivers doing metro deliveries across Sydney.
+
+There are two distinct interfaces in this codebase:
+1. **Back office web UI** — for the operations team to manage orders, assign drivers, and view POD records
+2. **Driver PWA** — a mobile-first Progressive Web App for drivers to capture proof of delivery in the field
+
+Always confirm which interface and which milestone you are working on before starting any task.
+Always check `docs/alaseel-pod-spec.md` before implementing anything. Do not deviate from the spec without explicit approval.
+
+---
+
+## Primary Reference Document
+
+**SINGLE SOURCE OF TRUTH:**
+`docs/alaseel-pod-spec.md` — Full platform specification including schema, features, API routes, and build order.
+
+Read the relevant section of the spec before implementing any feature. If the spec and these rules conflict, flag it before proceeding.
+
+---
+
+## Technology Stack (MANDATED — NON-NEGOTIABLE)
+
+### Runtime & Platform
+- **Runtime**: Cloudflare Workers (OpenNext adapter)
+- **Framework**: Next.js 15 (App Router, TypeScript, Server Components)
+- **DO NOT use Node.js-only APIs**: No `fs`, `path`, `os`, `child_process`, `net`, `http`, `https`, `stream`, `buffer`
+- **Use Web Standard APIs only**: `fetch`, `Request`, `Response`, `URL`, `Headers`, `crypto.subtle`
+
+### Database
+- **Database**: Neon (PostgreSQL)
+- **Connection Pooling**: Cloudflare Hyperdrive (mandatory — never connect directly to Neon)
+- **ORM**: Drizzle ORM
+- **DO NOT use** Turso, SQLite, LibSQL, Prisma, or any other ORM
+- **Migrations**: Always use `drizzle-kit generate` then `drizzle-kit migrate` — NEVER use `drizzle-kit push`
+- **Migration output**: `db/migrations/` — always committed to git
+
+### Authentication
+- **Auth provider**: Clerk
+- **Roles**: `back_office` and `driver` — stored in Clerk public metadata and mirrored in local `users` table
+- **Session management**: Clerk handles all sessions — do not implement custom session logic
+
+### Other Services
+- **Object Storage**: Cloudflare R2 (signatures and delivery photos)
+- **Email**: Resend (transactional emails)
+- **Styling**: Tailwind CSS v3 + shadcn/ui
+- **Icons**: Lucide React exclusively — no other icon libraries
+- **Font**: Inter (Google Fonts)
+
+---
+
+## Database Connection Pattern (CRITICAL)
+
+```typescript
+// CORRECT — Always use Hyperdrive connection string
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+
+export const sql = neon(process.env.HYPERDRIVE_URL!);
+export const db = drizzle(sql);
+
+// WRONG — Never create manual connections
+const client = new Client({ connectionString: '...' }); // Fails in Workers
+```
+
+### Query Patterns
+```typescript
+// CORRECT — Parameterized with Drizzle
+const order = await db.select()
+  .from(ordersTable)
+  .where(eq(ordersTable.id, orderId))
+  .limit(1);
+
+// WRONG — String concatenation (SQL injection risk)
+const order = await db.execute(`SELECT * FROM orders WHERE id = '${orderId}'`);
+```
+
+### Migration Workflow
+1. Edit `db/schema.ts` — add new tables or columns
+2. Run `npx drizzle-kit generate` — creates migration SQL file in `db/migrations/`
+3. Review the generated SQL before applying
+4. Run `npx drizzle-kit migrate` — applies to the database
+5. Never use `drizzle-kit push` — it bypasses migration history
+6. Always run `npm run build` after schema changes to catch TypeScript errors
+
+---
+
+## Permission Checks (CRITICAL — ENFORCE ON EVERY API ROUTE)
+
+Every API route must verify in this order:
+1. User is authenticated (Clerk session valid)
+2. User has the required role for the action
+3. User can only access their own data (drivers see only their deliveries)
+
+### Standard Pattern
+```typescript
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const { userId } = await auth();
+  if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const user = await db.select().from(usersTable).where(eq(usersTable.clerkId, userId)).limit(1);
+  if (!user[0]) return Response.json({ error: 'User not found' }, { status: 404 });
+
+  if (user[0].role !== 'back_office') return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+  // proceed with query
+}
+```
+
+### Driver Scoping Rule
+Drivers must NEVER be able to access another driver's deliveries, orders, or POD records.
+Always scope driver queries by the authenticated user's ID:
+```typescript
+.where(and(eq(deliveriesTable.id, params.id), eq(deliveriesTable.driverId, user[0].id)))
+```
+
+---
+
+## POD Immutability Rule (CRITICAL)
+
+POD records are legal evidence of delivery. Once created they must never be modified or deleted.
+- No `UPDATE` or `DELETE` endpoints for `pods` or `pod_photos` tables — ever
+- If a back office user needs to add context, use a separate `pod_notes` table
+- If Cursor suggests modifying a POD record, refuse and flag it
+
+---
+
+## R2 File Storage Rules
+
+- Never expose R2 bucket URLs directly — always generate signed URLs at read time
+- Signed URL expiry: 1 hour maximum
+- Folder structure: `pods/{pod_id}/signature.png` and `pods/{pod_id}/photos/{photo_id}.jpg`
+- Signature images are converted from canvas base64 to buffer before upload
+- Photos use `capture="environment"` on file inputs to open the rear camera on mobile
+
+```typescript
+// CORRECT — Generate signed URL at read time
+const signedUrl = await r2.sign(objectKey, { expiresIn: 3600 });
+
+// WRONG — Never store or return raw R2 URLs directly to the client
+return Response.json({ url: `https://${R2_BUCKET}.r2.cloudflarestorage.com/${key}` });
+```
+
+---
+
+## Shopify Webhook Rules
+
+- Always verify the HMAC signature on every incoming webhook request before processing
+- Handle idempotency — if the same Shopify order ID arrives twice, do not create a duplicate order
+- Check for existing order with same `shopify_order_id` before inserting
+- Orders with no shipping address: log and skip, do not create a delivery record
+- Return HTTP 200 immediately even if processing fails — Shopify will retry on non-200
+
+```typescript
+// Always verify HMAC first
+const hmac = request.headers.get('x-shopify-hmac-sha256');
+const isValid = await verifyShopifyHmac(await request.text(), hmac, process.env.SHOPIFY_WEBHOOK_SECRET!);
+if (!isValid) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+```
+
+---
+
+## Driver PWA Rules (CRITICAL FOR MOBILE)
+
+The driver app is used on phones and iPads in the field. These rules are non-negotiable:
+
+### Touch & Tap Targets
+- All interactive elements must be minimum **48×48px**
+- No hover-only interactions — everything must work on touch
+- Buttons must have clear pressed/active states
+
+### iOS Input Fix
+- All `<input>` and `<textarea>` elements must have `font-size: 16px` minimum
+- This prevents iOS from auto-zooming on input focus which breaks the layout
+
+```tsx
+// CORRECT
+<input className="text-base ..." /> // text-base = 16px in Tailwind
+
+// WRONG — iOS will zoom on focus
+<input className="text-sm ..." /> // text-sm = 14px
+```
+
+### Camera Access
+- All file inputs for photo capture must use `capture="environment"` to open the rear camera
+- Always show a preview of the captured photo before the driver submits
+
+```tsx
+<input type="file" accept="image/*" capture="environment" />
+```
+
+### Offline Support
+- The driver app must work without a network connection
+- Queue POD submissions in IndexedDB when offline
+- Auto-sync queued submissions when connection is restored
+- Show a visible offline indicator banner when there is no network
+- Never show a blank screen or error when offline — show cached data
+
+### GPS Capture
+- Request geolocation permission on first driver login
+- Capture `gps_lat` and `gps_lng` at the moment the driver taps submit on a POD
+- If GPS is unavailable, submit without coordinates and log a warning — do not block submission
+- Never log GPS coordinates to the console
+
+---
+
+## Development vs Production Environments
+
+### Development
+- **Branch**: `develop`
+- **Database**: Separate Neon database (`alaseel_pod_dev`)
+- **Email**: Resend sandbox mode — no real emails sent
+- **Local Dev**: `wrangler dev`
+
+### Production
+- **Branch**: `main`
+- **Database**: Separate Neon database (`alaseel_pod_prod`)
+- **Email**: Resend production — real emails sent
+- **Deployment**: OpenNext on Cloudflare Workers
+
+---
+
+## Design System
+
+### Philosophy
+Clean, functional, and fast. The driver app is used in the field — no decorative flourishes. The back office is a data tool — clarity over style. Mazati brand colours appear as accents only, not as backgrounds or dominant colours.
+
+### Colour System
+
+**Brand Accent:**
+- Mazati Green `#51836D` — primary CTAs, active states, badges, key highlights only
+- Use sparingly — one or two elements per view maximum
+
+**Backgrounds:**
+- Page background: `bg-gray-50`
+- Card/panel background: `bg-white`
+- Input background: `bg-white`
+
+**Text:**
+- Primary: `text-gray-900`
+- Secondary: `text-gray-600`
+- Muted/hint: `text-gray-400`
+- On Mazati Green background: `text-white`
+
+**Borders:**
+- Default: `border-gray-200`
+- Focus ring: `ring-[#51836D]`
+
+**Functional Colours:**
+- Success: `bg-emerald-50 text-emerald-700 border-emerald-200`
+- Warning: `bg-amber-50 text-amber-700 border-amber-200`
+- Danger: `bg-red-50 text-red-700 border-red-200`
+- Info: `bg-blue-50 text-blue-700 border-blue-200`
+
+**Delivery Status Colours:**
+| Status | Classes |
+|---|---|
+| pending | `bg-gray-100 text-gray-600` |
+| assigned | `bg-blue-100 text-blue-700` |
+| in_transit | `bg-amber-100 text-amber-700` |
+| completed | `bg-emerald-100 text-emerald-700` |
+| attempted | `bg-orange-100 text-orange-700` |
+
+### Buttons
+```tsx
+// Primary — use Mazati green inline style (not a Tailwind class)
+<button style={{ backgroundColor: '#51836D' }} className="text-white rounded-lg px-4 py-2 hover:opacity-90 transition-opacity">
+  Confirm Delivery
+</button>
+
+// Secondary
+<button className="border border-gray-300 text-gray-700 rounded-lg px-4 py-2 hover:bg-gray-50">
+  Cancel
+</button>
+
+// Destructive
+<button className="bg-red-600 text-white rounded-lg px-4 py-2 hover:bg-red-700">
+  Delete
+</button>
+
+// Driver app — large touch target variant
+<button style={{ backgroundColor: '#51836D' }} className="text-white rounded-xl px-6 py-4 text-base font-medium w-full hover:opacity-90 active:opacity-80">
+  Submit POD
+</button>
+```
+
+### shadcn/ui Usage
+- Use shadcn components from `components/ui` for all standard UI elements
+- Style: New York, Base: Slate, CSS variables: Yes
+- Override with `className` to match the Mazati brand colour where needed
+
+### Layout & Spacing
+- Back office page container: `max-w-7xl mx-auto px-6 py-8`
+- Card pattern: `bg-white rounded-xl border border-gray-200 p-6`
+- Section gaps: `gap-6`
+- Card padding: `p-6`
+
+### Typography
+- Page title: `text-2xl font-bold text-gray-900`
+- Section title: `text-lg font-semibold text-gray-900`
+- Card title: `text-base font-semibold text-gray-900`
+- Body: `text-sm text-gray-600`
+- Muted: `text-sm text-gray-400`
+
+### Icons
+- Lucide React exclusively
+- Standard size: `w-5 h-5`
+- In buttons: `w-4 h-4`
+- Always set explicit colour — never rely on inheritance
+
+### Responsive Design
+- **Back office primary**: Desktop (1024px+)
+- **Back office secondary**: Tablet (768px+)
+- **Driver app primary**: Mobile (375px+)
+- **Driver app secondary**: iPad (768px+)
+
+---
+
+## Project Structure
+
+```
+alaseel-pod/
+├── app/
+│   ├── (auth)/sign-in/
+│   ├── dashboard/              # Back office routes
+│   │   ├── page.tsx
+│   │   ├── orders/
+│   │   ├── drivers/
+│   │   ├── pods/
+│   │   ├── email-queue/
+│   │   └── settings/
+│   ├── driver/                 # Driver PWA routes
+│   │   ├── page.tsx
+│   │   └── delivery/[id]/
+│   ├── api/
+│   │   ├── webhooks/shopify/
+│   │   ├── pods/
+│   │   ├── orders/
+│   │   └── email-inbound/
+│   └── pod/[token]/            # Public read-only POD view
+├── components/
+│   ├── back-office/
+│   ├── driver/
+│   ├── shared/
+│   └── ui/                     # shadcn components
+├── db/
+│   ├── schema.ts
+│   └── migrations/             # Always committed to git
+├── lib/
+│   ├── auth.ts
+│   ├── db.ts
+│   ├── r2.ts
+│   ├── shopify.ts
+│   ├── email-parser.ts
+│   └── notifications.ts
+├── docs/
+│   └── alaseel-pod-spec.md     # Source of truth — read before every milestone
+├── drizzle.config.ts
+├── wrangler.toml
+└── .env.local                  # Never committed to git
+```
+
+---
+
+## Stop and Flag Rules
+
+Stop and explicitly flag before:
+- Adding any new npm package — state what it does and why it's needed
+- Modifying `middleware.ts` — state exactly what is changing and why
+- Adding Cloudflare cron triggers to `wrangler.toml`
+- Writing any `UPDATE` or `DELETE` query against `pods` or `pod_photos`
+- Creating any file outside the project structure above
+
+Then wait for confirmation before proceeding.
+
+---
+
+## Performance Guidelines
+
+### Cloudflare Workers Limits
+- CPU time: 50ms soft limit — keep queries lean
+- Memory: 128MB
+- No blocking loops, no N+1 queries
+
+### Query Optimisation
+```typescript
+// CORRECT — Select only needed columns
+const orders = await db.select({
+  id: ordersTable.id,
+  recipientName: ordersTable.recipientName,
+  status: ordersTable.status
+}).from(ordersTable);
+
+// WRONG — Never select all on large tables
+const orders = await db.select().from(ordersTable);
+
+// CORRECT — Always paginate
+const PAGE_SIZE = 50;
+const orders = await db.select().from(ordersTable).limit(PAGE_SIZE).offset(page * PAGE_SIZE);
+```
+
+---
+
+## Git Workflow
+
+```bash
+main        # Production
+develop     # Development (default working branch)
+
+# Feature branches always cut from develop
+git checkout develop
+git checkout -b feature/milestone-1-schema
+git checkout -b feature/milestone-2-orders
+git checkout -b bugfix/driver-offline-sync
+```
+
+### Before Every Commit
+- [ ] No `console.log` statements left in code
+- [ ] No commented-out code
+- [ ] `npm run build` passes with zero TypeScript errors
+- [ ] Permission checks on every API route
+- [ ] Driver queries are scoped to the authenticated driver's ID
+
+### Before Every PR
+- [ ] Milestone acceptance criteria met and tested
+- [ ] Back office UI tested on desktop
+- [ ] Driver UI tested on mobile (375px) and iPad (768px)
+- [ ] No security issues introduced
+- [ ] `npm run build` clean
+
+---
+
+## Milestone Testing Checklist
+
+Before marking any milestone complete:
+- [ ] Feature works end-to-end — not just UI, but data saving and reading correctly
+- [ ] Back office role cannot access driver routes and vice versa
+- [ ] All API routes have permission checks
+- [ ] `npm run build` passes with no TypeScript errors
+- [ ] No console errors in browser
+- [ ] Responsive on the correct breakpoints for the interface (back office = desktop, driver = mobile)
+- [ ] All tap targets in driver app are minimum 48×48px
+- [ ] Inputs in driver app have `font-size: 16px` minimum
+- [ ] Acceptance criteria from the spec met
+
+---
+
+## Common Mistakes to Avoid
+
+**Never:**
+- Use Node.js-only APIs (`fs`, `path`, `buffer`, etc.) — this runs on Cloudflare Workers
+- Use `drizzle-kit push` — always generate and migrate
+- Connect to Neon directly — always go through Hyperdrive
+- Expose raw R2 URLs — always use signed URLs
+- Allow a driver to query another driver's data
+- Modify or delete a POD record
+- Commit `.env.local` or any secrets
+- Use `console.log` for sensitive data (GPS, signatures, personal details)
+- Skip HMAC verification on Shopify webhooks
+- Use `text-sm` on inputs in the driver app (causes iOS zoom)
+
+**Always:**
+- Check `docs/alaseel-pod-spec.md` before implementing
+- Scope driver queries to the authenticated driver
+- Validate Shopify webhook HMAC before processing
+- Generate signed R2 URLs at read time
+- Handle the offline case in the driver app
+- Test driver UI on mobile viewport before calling a milestone done
+- Run `npm run build` before committing

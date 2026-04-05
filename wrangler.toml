@@ -1,0 +1,24 @@
+# OpenNext on Cloudflare Workers — https://opennext.js.org/cloudflare
+# Set HYPERDRIVE_ID in .dev.vars (local) or the dashboard (production) and reference below,
+# or replace the id value with your Hyperdrive configuration ID from the Cloudflare dashboard.
+
+name = "alaseel-pod"
+main = ".open-next/worker.js"
+compatibility_date = "2025-03-01"
+compatibility_flags = [ "nodejs_compat", "global_fetch_strictly_public" ]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[[services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "alaseel-pod"
+
+[images]
+binding = "IMAGES"
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+# Use env substitution: add HYPERDRIVE_ID to .dev.vars (see .env.example)
+id = "${HYPERDRIVE_ID}"
