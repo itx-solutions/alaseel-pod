@@ -366,33 +366,30 @@ export async function createOrderData(input: {
   }
 
   if (input.driver_id) {
-    const result = await db.transaction(async (tx) => {
-      const [o] = await tx
-        .insert(orders)
-        .values({
-          source: "manual",
-          recipientName: input.recipient_name,
-          deliveryAddress: input.delivery_address,
-          recipientPhone: input.recipient_phone ?? null,
-          recipientEmail: input.recipient_email ?? null,
-          items,
-          specialInstructions: input.special_instructions ?? null,
-          status: "assigned",
-        })
-        .returning();
-
-      if (!o) throw new Error("Insert failed");
-
-      await tx.insert(deliveries).values({
-        orderId: o.id,
-        driverId: input.driver_id!,
+    // neon-http has no transactions — sequential writes (see lib/db.ts).
+    const [o] = await db
+      .insert(orders)
+      .values({
+        source: "manual",
+        recipientName: input.recipient_name,
+        deliveryAddress: input.delivery_address,
+        recipientPhone: input.recipient_phone ?? null,
+        recipientEmail: input.recipient_email ?? null,
+        items,
+        specialInstructions: input.special_instructions ?? null,
         status: "assigned",
-      });
+      })
+      .returning();
 
-      return o.id;
+    if (!o) throw new Error("Insert failed");
+
+    await db.insert(deliveries).values({
+      orderId: o.id,
+      driverId: input.driver_id!,
+      status: "assigned",
     });
 
-    const detail = await getOrderDetailData(result);
+    const detail = await getOrderDetailData(o.id);
     if (!detail) throw new Error("Load failed");
     return detail;
   }
@@ -487,17 +484,16 @@ export async function assignDriverData(
     .limit(1);
 
   if (!delRow) {
-    await db.transaction(async (tx) => {
-      await tx.insert(deliveries).values({
-        orderId,
-        driverId,
-        status: "assigned",
-      });
-      await tx
-        .update(orders)
-        .set({ status: "assigned", updatedAt: new Date() })
-        .where(eq(orders.id, orderId));
+    // neon-http has no transactions — sequential writes (see lib/db.ts).
+    await db.insert(deliveries).values({
+      orderId,
+      driverId,
+      status: "assigned",
     });
+    await db
+      .update(orders)
+      .set({ status: "assigned", updatedAt: new Date() })
+      .where(eq(orders.id, orderId));
   } else {
     await db
       .update(deliveries)

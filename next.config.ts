@@ -15,10 +15,6 @@ if (
 
 initOpenNextCloudflareForDev();
 
-const nextConfig: NextConfig = {
-  // `ws` + optional native addons must not be webpack-bundled or WebSockets break at runtime
-  // (bufferUtil.mask is not a function / Connection terminated unexpectedly).
-  serverExternalPackages: ["ws", "bufferutil", "utf-8-validate"],
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
