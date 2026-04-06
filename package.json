@@ -11,7 +11,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy": "opennextjs-cloudflare build && wrangler deploy --config wrangler.toml",
+    "cf-deploy": "wrangler deploy .open-next/worker.js --name alaseel-pod --no-bundle",
     "cf-typegen": "wrangler types --config wrangler.toml --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {

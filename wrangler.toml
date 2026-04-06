@@ -20,5 +20,8 @@ binding = "IMAGES"
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-# Use env substitution: add HYPERDRIVE_ID to .dev.vars (see .env.example)
-id = "${HYPERDRIVE_ID}"
+id = "dbd879f0f4844b5792c809ef486c878a"
+
+[[routes]]
+pattern = "pod.mazati.au/*"
+zone_name = "mazati.au"
