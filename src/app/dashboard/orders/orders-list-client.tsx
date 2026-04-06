@@ -80,8 +80,12 @@ export function OrdersListClient() {
     router.replace(`/dashboard/orders${q}`, { scroll: false });
   }, [page, debouncedSearch, status, router]);
 
+  const fetchSeq = useRef(0);
+
   useEffect(() => {
-    let cancelled = false;
+    const seq = ++fetchSeq.current;
+    const ac = new AbortController();
+
     setLoading(true);
     setError(null);
 
@@ -93,7 +97,7 @@ export function OrdersListClient() {
     const q = params.toString();
     const url = `/api/orders${q ? `?${q}` : ""}`;
 
-    fetch(url, { credentials: "include" })
+    fetch(url, { credentials: "include", signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -104,18 +108,21 @@ export function OrdersListClient() {
         return res.json() as Promise<PaginatedOrdersResponse>;
       })
       .then((json) => {
-        if (!cancelled) setData(json);
+        if (seq !== fetchSeq.current) return;
+        setData(json);
       })
       .catch((e: unknown) => {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : "Failed to load orders");
+        if (seq !== fetchSeq.current) return;
+        if (e instanceof Error && e.name === "AbortError") return;
+        setError(e instanceof Error ? e.message : "Failed to load orders");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (seq !== fetchSeq.current) return;
+        setLoading(false);
       });
 
     return () => {
-      cancelled = true;
+      ac.abort();
     };
   }, [page, debouncedSearch, status]);
 
