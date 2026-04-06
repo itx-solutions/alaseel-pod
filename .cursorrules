@@ -79,6 +79,10 @@ const order = await db.select()
 const order = await db.execute(`SELECT * FROM orders WHERE id = '${orderId}'`);
 ```
 
+### Database Patterns
+
+- **No transactions** — The `neon-http` driver does not support `db.transaction()`. **Never** use `db.transaction()` anywhere in this codebase. When multiple writes need to happen together, perform them sequentially and handle partial failure with explicit cleanup or compensating writes. Document the trade-off in a code comment.
+
 ### Migration Workflow
 1. Edit `db/schema.ts` — add new tables or columns
 2. Run `npx drizzle-kit generate` — creates migration SQL file in `db/migrations/`

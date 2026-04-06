@@ -51,15 +51,22 @@ export async function ensureUserRecord(): Promise<AuthenticatedUser> {
     .limit(1);
   if (existing) return existing;
 
-  const [created] = await getDb()
-    .insert(users)
-    .values({
-      clerkId: cu.id,
-      role,
-      name,
-      email,
-    })
-    .returning();
+  let created: AuthenticatedUser | undefined;
+  try {
+    const rows = await getDb()
+      .insert(users)
+      .values({
+        clerkId: cu.id,
+        role,
+        name,
+        email,
+      })
+      .returning();
+    created = rows[0];
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
 
   if (!created) {
     throw new Error("Failed to create user record");
