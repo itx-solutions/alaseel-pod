@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Package } from "lucide-react";
+import { ClipboardCheck, Package } from "lucide-react";
 import { StatsCard } from "@/components/back-office/stats-card";
 import { getDashboardStatsData } from "@/lib/data/orders";
 
@@ -27,7 +27,7 @@ export default async function DashboardHomePage() {
         </Link>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatsCard
           title="Orders today"
           value={stats.total_today}
@@ -47,6 +47,12 @@ export default async function DashboardHomePage() {
           title="Pending assignment"
           value={stats.pending_assignment}
           description="Awaiting a driver"
+        />
+        <StatsCard
+          title="PODs captured"
+          value={stats.pods_today}
+          description="Submitted today (UTC)"
+          icon={<ClipboardCheck aria-hidden />}
         />
       </div>
     </div>

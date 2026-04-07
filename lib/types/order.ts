@@ -83,6 +83,8 @@ export type PodSummaryDto = {
   podType: PodType;
   receiverName: string | null;
   submittedAt: string;
+  photo_count: number;
+  signature_thumbnail_url: string | null;
 };
 
 /** Core order fields returned in detail and create responses */
@@ -142,6 +144,7 @@ export type DashboardStatsResponse = {
   completed_today: number;
   in_transit: number;
   pending_assignment: number;
+  pods_today: number;
 };
 
 /** Helper: short display id for tables */

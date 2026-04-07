@@ -11,8 +11,12 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { deliveries, orders, pods, users } from "@/db/schema";
+import { deliveries, orders, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import {
+  countPodsSubmittedTodayUtc,
+  getPodSummaryForOrderDelivery,
+} from "@/lib/data/pods";
 import type {
   DashboardStatsResponse,
   DeliveryDetailDto,
@@ -228,11 +232,14 @@ export async function getDashboardStatsData(): Promise<DashboardStatsResponse> {
     .from(orders)
     .where(eq(orders.status, "pending"));
 
+  const pods_today = await countPodsSubmittedTodayUtc();
+
   return {
     total_today: Number(totalRow?.total ?? 0),
     completed_today: Number(completedRow?.total ?? 0),
     in_transit: Number(inTransitRow?.total ?? 0),
     pending_assignment: Number(pendingRow?.total ?? 0),
+    pods_today,
   };
 }
 
@@ -301,24 +308,7 @@ export async function getOrderDetailData(
 
   let podDto: PodSummaryDto | null = null;
   if (deliveryRow) {
-    const [podRow] = await db
-      .select({
-        id: pods.id,
-        podType: pods.podType,
-        receiverName: pods.receiverName,
-        submittedAt: pods.submittedAt,
-      })
-      .from(pods)
-      .where(eq(pods.deliveryId, deliveryRow.id))
-      .limit(1);
-    if (podRow) {
-      podDto = {
-        id: podRow.id,
-        podType: podRow.podType,
-        receiverName: podRow.receiverName,
-        submittedAt: toIso(podRow.submittedAt),
-      };
-    }
+    podDto = await getPodSummaryForOrderDelivery(deliveryRow.id);
   }
 
   const deliveryDto: DeliveryDetailDto | null = deliveryRow

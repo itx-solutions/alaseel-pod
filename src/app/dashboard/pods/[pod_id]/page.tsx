@@ -1,26 +1,15 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { notFound } from "next/navigation";
+import { getPodDetailForBackOffice } from "@/lib/data/pods";
+import { PodDetailClient } from "./pod-detail-client";
 
-export default async function PodPlaceholderPage({
+export default async function PodDetailPage({
   params,
 }: {
   params: Promise<{ pod_id: string }>;
 }) {
   const { pod_id } = await params;
+  const initial = await getPodDetailForBackOffice(pod_id);
+  if (!initial) notFound();
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">POD record</h1>
-        <p className="mt-1 font-mono text-sm text-gray-500">{pod_id}</p>
-        <p className="mt-4 text-sm text-gray-600">
-          Full POD viewing (signature, photos, map) will ship in a later
-          milestone. This route confirms navigation from order detail works.
-        </p>
-      </div>
-      <Button variant="outline" asChild>
-        <Link href="/dashboard/pods">Back to POD list</Link>
-      </Button>
-    </div>
-  );
+  return <PodDetailClient initial={initial} />;
 }
