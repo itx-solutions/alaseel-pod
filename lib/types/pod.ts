@@ -41,6 +41,12 @@ export type PodDetailDeliveryDto = {
   notes: string | null;
 };
 
+/** GET /api/pods/[id]/images — base64 data URLs for PDF (server-fetched from R2) */
+export type PodImagesPdfResponse = {
+  signature: string | null;
+  photos: string[];
+};
+
 /** GET /api/pods/[id] — full detail with signed URLs */
 export type PodDetailResponse = {
   pod: {

@@ -349,3 +349,54 @@ export async function countPodsSubmittedTodayUtc(): Promise<number> {
     .where(and(gte(pods.submittedAt, start), lte(pods.submittedAt, end)));
   return Number(row?.n ?? 0);
 }
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes).toString("base64");
+  }
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
+}
+
+async function fetchSignedUrlToDataUrl(signedUrl: string): Promise<string> {
+  const res = await fetch(signedUrl, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch object from storage (${res.status})`);
+  }
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const rawCt = res.headers.get("content-type");
+  const primary = rawCt?.split(";")[0]?.trim() ?? "";
+  const ct =
+    primary.startsWith("image/") && !primary.includes("svg")
+      ? primary
+      : "image/jpeg";
+  return `data:${ct};base64,${uint8ToBase64(buf)}`;
+}
+
+/**
+ * Loads POD images from R2 via presigned GET (server-side fetch, no CORS).
+ * Used by GET /api/pods/[id]/images for PDF generation on the client.
+ */
+export async function getPodImagesBase64ForPdf(
+  podId: string,
+): Promise<{ signature: string | null; photos: string[] } | null> {
+  const raw = await loadPodDetailRaw(podId);
+  if (!raw) return null;
+
+  let signature: string | null = null;
+  if (raw.pod.podType === "signed" && raw.pod.signatureUrl) {
+    const url = await getSignedR2Url(raw.pod.signatureUrl, 3600);
+    signature = await fetchSignedUrlToDataUrl(url);
+  }
+
+  const photos: string[] = [];
+  for (const p of raw.photos) {
+    const url = await getSignedR2Url(p.photoUrl, 3600);
+    photos.push(await fetchSignedUrlToDataUrl(url));
+  }
+
+  return { signature, photos };
+}
