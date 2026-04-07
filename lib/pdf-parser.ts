@@ -1,5 +1,3 @@
-import { PDFParse } from "pdf-parse";
-
 /** Claude PDF vision + text-array extraction output shape. */
 export interface PdfDeliveryOrder {
   recipient_name: string | null;
@@ -38,11 +36,6 @@ Rules:
 - confidence "medium": some fields present but incomplete
 - confidence "low": cannot determine delivery details
 - If this is not a delivery-related document, return an empty array []`;
-
-const PDF_TEXT_USER_PREFIX = `The following text was extracted from a PDF attachment. Follow the same JSON array rules as for a full PDF document.
-
---- PDF text ---
-`;
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -161,32 +154,6 @@ async function callClaudeMessages(
 }
 
 /**
- * Extract plain text from a PDF buffer. Never throws.
- * Returns null if extraction fails or text is shorter than 50 characters.
- */
-export async function extractTextFromPdf(
-  pdfBuffer: ArrayBuffer,
-): Promise<string | null> {
-  let parser: PDFParse | undefined;
-  try {
-    const data = new Uint8Array(pdfBuffer);
-    parser = new PDFParse({ data });
-    const result = await parser.getText();
-    const text = result.text?.trim() ?? "";
-    if (text.length < 50) return null;
-    return text;
-  } catch {
-    return null;
-  } finally {
-    try {
-      await parser?.destroy();
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
-/**
  * Sends the raw PDF to Claude document vision. Never throws; returns [] on error.
  */
 export async function parsePdfWithClaude(
@@ -226,73 +193,14 @@ export async function parsePdfWithClaude(
   }
 }
 
-async function parsePdfTextWithClaude(
-  extractedText: string,
-  apiKey: string,
-): Promise<PdfDeliveryOrder[]> {
-  if (!apiKey.trim()) return [];
-  try {
-    const text = await callClaudeMessages(apiKey, {
-      model: MODEL,
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `${PDF_TEXT_USER_PREFIX}${extractedText}`,
-            },
-          ],
-        },
-      ],
-      system: PDF_ARRAY_PROMPT,
-    });
-    if (!text) return [];
-    return parseOrdersJson(text);
-  } catch {
-    return [];
-  }
-}
-
-export type ExtractPdfOrdersResult = {
-  orders: PdfDeliveryOrder[];
-  /** Shown as email_queue.raw_body for PDF-sourced rows. */
-  displayBody: string;
-};
-
-/**
- * Tries local text extraction + Claude on text; if that yields no orders, falls back to PDF vision.
- * Never throws.
- */
 export async function extractDeliveryOrdersFromPdf(
   pdfBuffer: ArrayBuffer,
   apiKey: string,
-): Promise<ExtractPdfOrdersResult> {
-  let extractedText: string | null = null;
-  try {
-    extractedText = await extractTextFromPdf(pdfBuffer);
-  } catch {
-    extractedText = null;
-  }
-
-  if (extractedText) {
-    const fromText = await parsePdfTextWithClaude(extractedText, apiKey);
-    if (fromText.length > 0) {
-      return { orders: fromText, displayBody: extractedText };
-    }
-  }
-
-  const fromVision = await parsePdfWithClaude(pdfBuffer, apiKey);
-  if (fromVision.length > 0) {
-    return {
-      orders: fromVision,
-      displayBody: "PDF attachment — see parsed data",
-    };
-  }
-
-  return {
-    orders: [],
-    displayBody: extractedText ?? "PDF attachment — see parsed data",
-  };
+): Promise<{ orders: PdfDeliveryOrder[]; displayBody: string }> {
+  const orders = await parsePdfWithClaude(pdfBuffer, apiKey);
+  const displayBody =
+    orders.length > 0
+      ? "PDF attachment — parsed via Claude vision"
+      : "PDF attachment — could not extract delivery details";
+  return { orders, displayBody };
 }
