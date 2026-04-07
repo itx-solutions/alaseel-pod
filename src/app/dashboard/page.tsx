@@ -74,6 +74,25 @@ export default async function DashboardHomePage() {
           </Link>
         </div>
       ) : null}
+
+      {stats.email_pending > 0 ? (
+        <div
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          role="status"
+        >
+          <span className="font-medium">
+            {stats.email_pending} email
+            {stats.email_pending === 1 ? "" : "s"} awaiting review
+          </span>
+          {" — "}
+          <Link
+            href="/dashboard/email-queue"
+            className="font-medium text-amber-950 underline decoration-amber-600 underline-offset-2 hover:opacity-90"
+          >
+            Review in Email Queue
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

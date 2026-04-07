@@ -148,6 +148,7 @@ export type DashboardStatsResponse = {
   pending_assignment: number;
   pods_today: number;
   shopify_pending: number;
+  email_pending: number;
 };
 
 /** Helper: short display id for tables */

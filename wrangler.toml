@@ -3,9 +3,12 @@
 # or replace the id value with your Hyperdrive configuration ID from the Cloudflare dashboard.
 
 name = "alaseel-pod"
-main = ".open-next/worker.js"
+main = "worker.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = [ "nodejs_compat", "global_fetch_strictly_public" ]
+
+[email]
+type = "email"
 
 [assets]
 directory = ".open-next/assets"

@@ -31,7 +31,10 @@ type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Red count badge for pending Shopify queue */
   shopifyBadge?: boolean;
+  /** Red count badge for pending email queue */
+  emailBadge?: boolean;
 };
 
 const nav: NavItem[] = [
@@ -45,7 +48,12 @@ const nav: NavItem[] = [
   },
   { href: "/dashboard/drivers", label: "Drivers", icon: Truck },
   { href: "/dashboard/pods", label: "POD Records", icon: ClipboardList },
-  { href: "/dashboard/email-queue", label: "Email Queue", icon: Mail },
+  {
+    href: "/dashboard/email-queue",
+    label: "Email Queue",
+    icon: Mail,
+    emailBadge: true,
+  },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
@@ -61,17 +69,26 @@ function NavLinks({
   iconOnly,
   onNavigate,
   shopifyPendingCount,
+  emailPendingCount,
 }: {
   pathname: string;
   iconOnly?: boolean;
   onNavigate?: () => void;
   shopifyPendingCount: number;
+  emailPendingCount: number;
 }) {
   return (
     <nav className="flex flex-col gap-0.5 p-2" aria-label="Main">
-      {nav.map(({ href, label, icon: Icon, shopifyBadge }) => {
+      {nav.map(({ href, label, icon: Icon, shopifyBadge, emailBadge }) => {
         const active = isActive(pathname, href);
-        const showBadge = shopifyBadge && shopifyPendingCount > 0;
+        const badgeCount = shopifyBadge
+          ? shopifyPendingCount
+          : emailBadge
+            ? emailPendingCount
+            : 0;
+        const showBadge =
+          (shopifyBadge && shopifyPendingCount > 0) ||
+          (emailBadge && emailPendingCount > 0);
         return (
           <Link
             key={href}
@@ -109,7 +126,7 @@ function NavLinks({
                 <span className="min-w-0 flex-1">{label}</span>
                 {showBadge ? (
                   <span className="shrink-0 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
-                    {shopifyPendingCount > 99 ? "99+" : shopifyPendingCount}
+                    {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 ) : null}
               </>
@@ -126,9 +143,11 @@ function NavLinks({
 export function DashboardShell({
   children,
   shopifyPendingCount = 0,
+  emailPendingCount = 0,
 }: {
   children: React.ReactNode;
   shopifyPendingCount?: number;
+  emailPendingCount?: number;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -146,6 +165,7 @@ export function DashboardShell({
         <NavLinks
           pathname={pathname}
           shopifyPendingCount={shopifyPendingCount}
+          emailPendingCount={emailPendingCount}
         />
       </aside>
 
@@ -163,6 +183,7 @@ export function DashboardShell({
           pathname={pathname}
           iconOnly
           shopifyPendingCount={shopifyPendingCount}
+          emailPendingCount={emailPendingCount}
         />
       </aside>
 
@@ -190,6 +211,7 @@ export function DashboardShell({
                 <NavLinks
                   pathname={pathname}
                   shopifyPendingCount={shopifyPendingCount}
+                  emailPendingCount={emailPendingCount}
                   onNavigate={() => setMobileOpen(false)}
                 />
               </SheetContent>

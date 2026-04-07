@@ -60,7 +60,9 @@ export function PodPdfDownload({ detail }: Props) {
         credentials: "include",
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
         throw new Error(
           typeof err.error === "string"
             ? err.error

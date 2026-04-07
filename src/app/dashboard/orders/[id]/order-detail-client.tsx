@@ -42,10 +42,12 @@ export function OrderDetailClient({
   initial,
   locked,
   showShopifyApprovedBanner,
+  showEmailApprovedBanner,
 }: {
   initial: OrderDetailResponse;
   locked: boolean;
   showShopifyApprovedBanner?: boolean;
+  showEmailApprovedBanner?: boolean;
 }) {
   const router = useRouter();
   const [data, setData] = useState(initial);
@@ -106,6 +108,14 @@ export function OrderDetailClient({
           role="status"
         >
           Delivery order created from Shopify queue.
+        </div>
+      ) : null}
+      {showEmailApprovedBanner ? (
+        <div
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          role="status"
+        >
+          Delivery order created from email queue.
         </div>
       ) : null}
       {locked ? (
@@ -169,6 +179,17 @@ export function OrderDetailClient({
                     }}
                   >
                     Shopify
+                  </span>
+                ) : order.source === "email" ? (
+                  <span
+                    className="inline-flex rounded border px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      borderColor: `${PRIMARY}40`,
+                      backgroundColor: `${PRIMARY}14`,
+                      color: PRIMARY,
+                    }}
+                  >
+                    Email
                   </span>
                 ) : (
                   <span className="capitalize">{order.source}</span>

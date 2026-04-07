@@ -18,7 +18,7 @@ function getDatabaseUrl(): string {
   if (direct) return direct;
   try {
     const { env } = getCloudflareContext({ async: false });
-    const hyperdrive = (env as Record<string, unknown>).HYPERDRIVE as
+    const hyperdrive = (env as unknown as Record<string, unknown>).HYPERDRIVE as
       | { connectionString?: string }
       | undefined;
     if (hyperdrive?.connectionString) return hyperdrive.connectionString;
@@ -31,6 +31,26 @@ function getDatabaseUrl(): string {
 }
 
 export type Database = NeonHttpDatabase<typeof schema>;
+
+/** Hyperdrive binding shape on Cloudflare Workers (email handler, etc.). */
+export type HyperdriveEnv = {
+  HYPERDRIVE?: { connectionString?: string };
+};
+
+/**
+ * Use in Workers handlers where `getCloudflareContext()` may be unavailable
+ * (e.g. Email Worker). Prefer `getDb()` in Next.js / fetch handlers.
+ */
+export function getDbFromWorkerEnv(env: HyperdriveEnv): Database {
+  const url =
+    env.HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "HYPERDRIVE.connectionString or DATABASE_URL is required for Worker DB access.",
+    );
+  }
+  return drizzle(neon(url), { schema });
+}
 
 export function getDb(): Database {
   return drizzle(neon(getDatabaseUrl()), { schema });

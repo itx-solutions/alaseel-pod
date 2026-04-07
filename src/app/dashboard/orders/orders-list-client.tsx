@@ -101,7 +101,9 @@ export function OrdersListClient() {
     fetch(url, { credentials: "include", signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
+          const err = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
           throw new Error(
             typeof err.error === "string" ? err.error : `Error ${res.status}`,
           );

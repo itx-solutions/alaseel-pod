@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ClipboardList } from "lucide-react";
+import { Inbox } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,30 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { PaginatedPodsResponse } from "@/lib/types/pod";
-
-const TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: "all", label: "All types" },
-  { value: "signed", label: "Signed" },
-  { value: "unattended", label: "Unattended" },
-];
-
-function buildQuery(
-  page: number,
-  search: string,
-  type: string,
-  dateFrom: string,
-  dateTo: string,
-): string {
-  const p = new URLSearchParams();
-  if (page > 1) p.set("page", String(page));
-  if (search.trim()) p.set("search", search.trim());
-  if (type && type !== "all") p.set("type", type);
-  if (dateFrom.trim()) p.set("date_from", dateFrom.trim());
-  if (dateTo.trim()) p.set("date_to", dateTo.trim());
-  const q = p.toString();
-  return q ? `?${q}` : "";
-}
+import type { PaginatedEmailQueueResponse } from "@/lib/types/email";
 
 const DISPLAY_LOCALE = "en-AU";
 const DISPLAY_TZ = "Australia/Sydney";
@@ -50,7 +27,69 @@ function formatDateTime(iso: string): string {
   });
 }
 
-export function PodsListClient() {
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "pending_review", label: "Pending Review" },
+  { value: "all", label: "All" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+];
+
+function queueStatusBadgeClasses(status: string): string {
+  switch (status) {
+    case "pending_review":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    case "approved":
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    case "rejected":
+      return "border-red-200 bg-red-50 text-red-800";
+    default:
+      return "border-gray-200 bg-gray-50 text-gray-700";
+  }
+}
+
+function queueStatusLabel(status: string): string {
+  switch (status) {
+    case "pending_review":
+      return "Pending Review";
+    case "approved":
+      return "Approved";
+    case "rejected":
+      return "Rejected";
+    default:
+      return status;
+  }
+}
+
+function confidenceBadgeClasses(
+  c: "high" | "medium" | "low" | null,
+): string {
+  switch (c) {
+    case "high":
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    case "medium":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    case "low":
+      return "border-red-200 bg-red-50 text-red-800";
+    default:
+      return "border-gray-200 bg-gray-100 text-gray-600";
+  }
+}
+
+function confidenceLabel(c: "high" | "medium" | "low" | null): string {
+  if (!c) return "—";
+  return c.charAt(0).toUpperCase() + c.slice(1);
+}
+
+function buildQuery(page: number, search: string, status: string): string {
+  const p = new URLSearchParams();
+  if (page > 1) p.set("page", String(page));
+  if (search.trim()) p.set("search", search.trim());
+  if (status !== "pending_review") p.set("status", status);
+  const q = p.toString();
+  return q ? `?${q}` : "";
+}
+
+export function EmailQueueListClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -59,18 +98,13 @@ export function PodsListClient() {
     Number(searchParams.get("page") ?? "1") || 1,
   );
   const initialSearch = searchParams.get("search") ?? "";
-  const initialType = searchParams.get("type") ?? "all";
-  const initialDateFrom = searchParams.get("date_from") ?? "";
-  const initialDateTo = searchParams.get("date_to") ?? "";
+  const initialStatus = searchParams.get("status") ?? "pending_review";
 
   const [page, setPage] = useState(initialPage);
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
-  const [type, setType] = useState(initialType);
-  const [dateFrom, setDateFrom] = useState(initialDateFrom);
-  const [dateTo, setDateTo] = useState(initialDateTo);
-
-  const [data, setData] = useState<PaginatedPodsResponse | null>(null);
+  const [status, setStatus] = useState(initialStatus);
+  const [data, setData] = useState<PaginatedEmailQueueResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,28 +128,26 @@ export function PodsListClient() {
   }, [debouncedSearch]);
 
   useEffect(() => {
-    const q = buildQuery(page, debouncedSearch, type, dateFrom, dateTo);
-    router.replace(`/dashboard/pods${q}`, { scroll: false });
-  }, [page, debouncedSearch, type, dateFrom, dateTo, router]);
+    const q = buildQuery(page, debouncedSearch, status);
+    router.replace(`/dashboard/email-queue${q}`, { scroll: false });
+  }, [page, debouncedSearch, status, router]);
 
   const fetchSeq = useRef(0);
-
   useEffect(() => {
     const seq = ++fetchSeq.current;
     const ac = new AbortController();
-
     setLoading(true);
     setError(null);
 
     const params = new URLSearchParams();
     if (page > 1) params.set("page", String(page));
     if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
-    if (type && type !== "all") params.set("type", type);
-    if (dateFrom.trim()) params.set("date_from", dateFrom.trim());
-    if (dateTo.trim()) params.set("date_to", dateTo.trim());
+    if (status === "all") params.set("status", "all");
+    else if (status !== "pending_review") params.set("status", status);
+    else params.set("status", "pending_review");
 
     const q = params.toString();
-    const url = `/api/pods${q ? `?${q}` : ""}`;
+    const url = `/api/email-queue${q ? `?${q}` : ""}`;
 
     fetch(url, { credentials: "include", signal: ac.signal })
       .then(async (res) => {
@@ -127,7 +159,7 @@ export function PodsListClient() {
             typeof err.error === "string" ? err.error : `Error ${res.status}`,
           );
         }
-        return res.json() as Promise<PaginatedPodsResponse>;
+        return res.json() as Promise<PaginatedEmailQueueResponse>;
       })
       .then((json) => {
         if (seq !== fetchSeq.current) return;
@@ -136,82 +168,62 @@ export function PodsListClient() {
       .catch((e: unknown) => {
         if (seq !== fetchSeq.current) return;
         if (e instanceof Error && e.name === "AbortError") return;
-        setError(e instanceof Error ? e.message : "Failed to load POD records");
+        setError(e instanceof Error ? e.message : "Failed to load queue");
       })
       .finally(() => {
         if (seq !== fetchSeq.current) return;
         setLoading(false);
       });
 
-    return () => {
-      ac.abort();
-    };
-  }, [page, debouncedSearch, type, dateFrom, dateTo]);
+    return () => ac.abort();
+  }, [page, debouncedSearch, status]);
+
+  const isEmptyPending =
+    data &&
+    data.items.length === 0 &&
+    status === "pending_review" &&
+    !debouncedSearch.trim();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">POD Records</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Email Queue</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Proof of delivery submissions. Search is debounced as you type.
+          Review inbound delivery emails before creating orders.
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-xl border border-gray-200 bg-white p-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 rounded-xl border border-gray-200 bg-white p-6 sm:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="pod-search">Search</Label>
+          <Label htmlFor="eq-search">Search</Label>
           <Input
-            id="pod-search"
-            placeholder="Recipient name or address"
+            id="eq-search"
+            placeholder="Sender address or subject"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="max-w-xl"
           />
         </div>
         <div className="space-y-2">
-          <Label>POD type</Label>
+          <Label>Status</Label>
           <Select
-            value={type}
+            value={status}
             onValueChange={(v) => {
-              setType(v);
+              setStatus(v);
               setPage(1);
             }}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Type" />
+              <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              {TYPE_OPTIONS.map((o) => (
+              {STATUS_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="date-from">Date from</Label>
-          <Input
-            id="date-from"
-            type="date"
-            value={dateFrom}
-            onChange={(e) => {
-              setDateFrom(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="date-to">Date to</Label>
-          <Input
-            id="date-to"
-            type="date"
-            value={dateTo}
-            onChange={(e) => {
-              setDateTo(e.target.value);
-              setPage(1);
-            }}
-          />
         </div>
       </div>
 
@@ -222,17 +234,14 @@ export function PodsListClient() {
       ) : null}
 
       {loading && !data ? (
-        <p className="text-sm text-gray-500">Loading POD records…</p>
+        <p className="text-sm text-gray-500">Loading queue…</p>
       ) : null}
 
-      {data && data.items.length === 0 && !loading ? (
+      {isEmptyPending ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-16 text-center">
-          <ClipboardList className="size-12 text-gray-400" aria-hidden />
+          <Inbox className="size-12 text-gray-400" aria-hidden />
           <p className="mt-4 text-sm font-medium text-gray-900">
-            No POD records found
-          </p>
-          <p className="mt-1 text-sm text-gray-600">
-            Try adjusting filters or search.
+            No emails in queue
           </p>
         </div>
       ) : null}
@@ -240,25 +249,20 @@ export function PodsListClient() {
       {data && data.items.length > 0 ? (
         <>
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[800px] text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50">
                 <tr>
+                  <th className="px-4 py-3 font-semibold text-gray-900">From</th>
                   <th className="px-4 py-3 font-semibold text-gray-900">
-                    Date/Time
+                    Subject
                   </th>
                   <th className="px-4 py-3 font-semibold text-gray-900">
-                    Recipient
+                    Received
                   </th>
                   <th className="px-4 py-3 font-semibold text-gray-900">
-                    Address
+                    Confidence
                   </th>
-                  <th className="px-4 py-3 font-semibold text-gray-900">
-                    Driver
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-900">Type</th>
-                  <th className="px-4 py-3 font-semibold text-gray-900">
-                    Photos
-                  </th>
+                  <th className="px-4 py-3 font-semibold text-gray-900">Status</th>
                   <th className="px-4 py-3 font-semibold text-gray-900">
                     Actions
                   </th>
@@ -267,35 +271,34 @@ export function PodsListClient() {
               <tbody className="divide-y divide-gray-100">
                 {data.items.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50/80">
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      {formatDateTime(row.submitted_at)}
+                    <td className="max-w-[200px] truncate px-4 py-3 text-gray-900">
+                      {row.raw_from}
                     </td>
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      {row.order_recipient_name}
+                    <td className="max-w-[240px] truncate px-4 py-3 text-gray-900">
+                      {row.raw_subject}
                     </td>
-                    <td className="max-w-[220px] truncate px-4 py-3 text-gray-700">
-                      {row.delivery_address}
+                    <td className="whitespace-nowrap px-4 py-3 text-gray-600">
+                      {formatDateTime(row.created_at)}
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{row.driver_name}</td>
                     <td className="px-4 py-3">
-                      {row.pod_type === "signed" ? (
-                        <span className="inline-flex rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                          Signed
-                        </span>
-                      ) : (
-                        <span className="inline-flex rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                          Unattended
-                        </span>
-                      )}
+                      <span
+                        className={`inline-flex rounded border px-2 py-0.5 text-xs font-medium ${confidenceBadgeClasses(row.confidence)}`}
+                      >
+                        {confidenceLabel(row.confidence)}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-700">
-                      {row.photo_count === 1
-                        ? "1 photo"
-                        : `${row.photo_count} photos`}
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex rounded border px-2 py-0.5 text-xs font-medium ${queueStatusBadgeClasses(row.status)}`}
+                      >
+                        {queueStatusLabel(row.status)}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <Button variant="outline" size="sm" asChild>
-                        <Link href={`/dashboard/pods/${row.id}`}>View</Link>
+                        <Link href={`/dashboard/email-queue/${row.id}`}>
+                          Review
+                        </Link>
                       </Button>
                     </td>
                   </tr>
@@ -328,6 +331,10 @@ export function PodsListClient() {
             </div>
           </div>
         </>
+      ) : null}
+
+      {data && data.items.length === 0 && !isEmptyPending && !loading ? (
+        <p className="text-sm text-gray-600">No emails match your filters.</p>
       ) : null}
     </div>
   );

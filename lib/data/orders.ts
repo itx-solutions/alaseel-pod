@@ -13,6 +13,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { deliveries, orders, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { countPendingEmailQueue } from "@/lib/data/email-queue";
 import { countPendingShopifyQueue } from "@/lib/data/shopify-queue";
 import {
   countPodsSubmittedTodayUtc,
@@ -235,6 +236,7 @@ export async function getDashboardStatsData(): Promise<DashboardStatsResponse> {
 
   const pods_today = await countPodsSubmittedTodayUtc();
   const shopify_pending = await countPendingShopifyQueue();
+  const email_pending = await countPendingEmailQueue();
 
   return {
     total_today: Number(totalRow?.total ?? 0),
@@ -243,6 +245,7 @@ export async function getDashboardStatsData(): Promise<DashboardStatsResponse> {
     pending_assignment: Number(pendingRow?.total ?? 0),
     pods_today,
     shopify_pending,
+    email_pending,
   };
 }
 
