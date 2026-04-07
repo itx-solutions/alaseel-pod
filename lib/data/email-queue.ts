@@ -49,6 +49,10 @@ function parseParsedData(
     }
     items = lines.length ? lines : null;
   }
+  const st = raw.source_type;
+  const sourceType =
+    st === "email_body" || st === "pdf_attachment" ? st : undefined;
+
   return {
     recipient_name:
       typeof raw.recipient_name === "string" ? raw.recipient_name : null,
@@ -64,6 +68,13 @@ function parseParsedData(
         ? raw.special_instructions
         : null,
     confidence: c,
+    ...(function orderRef(): { order_reference?: string | null } {
+      if (!("order_reference" in raw)) return {};
+      const v = raw.order_reference;
+      if (typeof v === "string" || v === null) return { order_reference: v };
+      return {};
+    })(),
+    ...(sourceType ? { source_type: sourceType } : {}),
     ...(typeof raw._created_order_id === "string"
       ? { _created_order_id: raw._created_order_id }
       : {}),
@@ -321,6 +332,12 @@ export async function approveEmailQueueEntry(
     special_instructions: merged.specialInstructions,
     confidence: parsed?.confidence ?? "medium",
     _created_order_id: inserted.id,
+    ...(parsed?.order_reference !== undefined && parsed?.order_reference !== null
+      ? { order_reference: parsed.order_reference }
+      : {}),
+    ...(parsed?.source_type
+      ? { source_type: parsed.source_type }
+      : {}),
   };
 
   await db

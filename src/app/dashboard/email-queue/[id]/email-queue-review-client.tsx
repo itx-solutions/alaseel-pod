@@ -171,9 +171,16 @@ export function EmailQueueReviewClient({
               Back to Email Queue
             </Link>
           </p>
-          <h1 className="mt-2 text-2xl font-bold text-gray-900">
-            {initial.raw_subject}
-          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900">
+              {initial.raw_subject}
+            </h1>
+            {p?.source_type === "pdf_attachment" ? (
+              <span className="inline-flex rounded border border-[#51836D] bg-[#51836D]/10 px-2 py-0.5 text-xs font-medium text-[#51836D]">
+                PDF attachment
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 text-sm text-gray-600">
             <span
               className={`inline-flex rounded border px-2 py-0.5 text-xs font-medium ${pending ? "border-amber-200 bg-amber-50 text-amber-800" : "border-gray-200 bg-gray-100 text-gray-700"}`}
@@ -215,9 +222,15 @@ export function EmailQueueReviewClient({
           </dl>
           <div>
             <p className="mb-2 text-sm font-medium text-gray-700">Body</p>
-            <pre className="max-h-[min(480px,50vh)] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-4 font-mono text-xs text-gray-800 ring-1 ring-gray-200">
-              {initial.raw_body}
-            </pre>
+            {initial.raw_body.startsWith("PDF attachment") ? (
+              <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700 ring-1 ring-gray-200">
+                Content extracted from PDF attachment
+              </p>
+            ) : (
+              <pre className="max-h-[min(480px,50vh)] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-4 font-mono text-xs text-gray-800 ring-1 ring-gray-200">
+                {initial.raw_body}
+              </pre>
+            )}
           </div>
         </div>
 
@@ -238,6 +251,12 @@ export function EmailQueueReviewClient({
 
             {!pending ? (
               <dl className="space-y-3 text-sm">
+                {p?.order_reference != null && p.order_reference !== "" ? (
+                  <div>
+                    <dt className="text-gray-500">Order/Invoice reference</dt>
+                    <dd className="text-gray-900">{p.order_reference}</dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt className="text-gray-500">Reviewed</dt>
                   <dd className="text-gray-900">
@@ -291,6 +310,12 @@ export function EmailQueueReviewClient({
               </dl>
             ) : (
               <div className="space-y-4">
+                {p?.order_reference != null && p.order_reference !== "" ? (
+                  <div className="space-y-2">
+                    <Label>Order/Invoice reference</Label>
+                    <p className="text-base text-gray-900">{p.order_reference}</p>
+                  </div>
+                ) : null}
                 <div className="space-y-2">
                   <Label htmlFor="eq-recipient">Recipient name</Label>
                   <Input

@@ -14,6 +14,10 @@ export interface ParsedEmailData {
   items: Array<{ name: string; quantity: number }> | null;
   special_instructions: string | null;
   confidence: ParsedEmailConfidence;
+  /** Order / invoice / stop reference (e.g. from PDF parsing). */
+  order_reference?: string | null;
+  /** Origin of parsed fields for display in review UI. */
+  source_type?: "email_body" | "pdf_attachment";
   /** Set after approve when order is created (not from Claude). */
   _created_order_id?: string;
 }
