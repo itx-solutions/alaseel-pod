@@ -87,6 +87,15 @@ export async function emailHandler(
   message: InboundEmailMessage,
   env: EmailHandlerEnv,
 ): Promise<void> {
+  const msg = message as InboundEmailMessage & {
+    to?: string;
+    rawSize?: number;
+  };
+  console.log("Email handler started", {
+    from: message.from,
+    to: msg.to,
+    size: msg.rawSize,
+  });
   try {
     const parsed = await PostalMime.parse(message.raw, {
       attachmentEncoding: "arraybuffer",
@@ -101,6 +110,12 @@ export async function emailHandler(
       rawBody = stripHtmlToText(parsed.html);
     }
     if (!rawBody) rawBody = "(empty body)";
+
+    const attachments = parsed.attachments ?? [];
+    console.log("Email parsed", {
+      subject: rawSubject,
+      hasAttachments: attachments.length,
+    });
 
     const apiKey = env.ANTHROPIC_API_KEY ?? "";
 
@@ -118,12 +133,21 @@ export async function emailHandler(
           const filename = att.filename?.trim() || "attachment.pdf";
           const subjectWithPdf = `${rawSubject} (PDF: ${filename})`;
 
+          if (apiKey) {
+            console.log("Calling Claude parser");
+          }
           const { orders, displayBody } = await extractDeliveryOrdersFromPdf(
             buf,
             apiKey,
           );
+          if (apiKey) {
+            console.log("Claude response", {
+              parsed: JSON.stringify({ orders, displayBody }),
+            });
+          }
 
           if (orders.length === 0) {
+            console.log("Inserting into email_queue");
             await insertInboundEmailQueueRow(
               {
                 rawFrom,
@@ -133,29 +157,39 @@ export async function emailHandler(
               },
               env,
             );
+            console.log("Insert complete");
           } else {
             for (const order of orders) {
+              const parsedData = pdfOrderToParsedData(order);
+              console.log("Inserting into email_queue");
               await insertInboundEmailQueueRow(
                 {
                   rawFrom,
                   rawSubject: subjectWithPdf,
                   rawBody: displayBody,
-                  parsedData: pdfOrderToParsedData(order),
+                  parsedData,
                 },
                 env,
               );
+              console.log("Insert complete");
             }
           }
         }
 
-        const bodyParsed = apiKey
-          ? await parseEmailWithClaude(rawSubject, rawBody, apiKey)
-          : null;
+        let bodyParsed: ParsedEmailData | null = null;
+        if (apiKey) {
+          console.log("Calling Claude parser");
+          bodyParsed = await parseEmailWithClaude(rawSubject, rawBody, apiKey);
+          console.log("Claude response", {
+            parsed: JSON.stringify(bodyParsed),
+          });
+        }
         if (bodyParsed && isDeliveryRelevantBody(bodyParsed)) {
           const withSource: ParsedEmailData = {
             ...bodyParsed,
             source_type: "email_body",
           };
+          console.log("Inserting into email_queue");
           await insertInboundEmailQueueRow(
             {
               rawFrom,
@@ -165,17 +199,25 @@ export async function emailHandler(
             },
             env,
           );
+          console.log("Insert complete");
         }
         return;
-      } catch {
+      } catch (error) {
+        console.error("Email handler error", error);
         /* fall through to body-only */
       }
     }
 
-    const parsedData = apiKey
-      ? await parseEmailWithClaude(rawSubject, rawBody, apiKey)
-      : null;
+    let parsedData: ParsedEmailData | null = null;
+    if (apiKey) {
+      console.log("Calling Claude parser");
+      parsedData = await parseEmailWithClaude(rawSubject, rawBody, apiKey);
+      console.log("Claude response", {
+        parsed: JSON.stringify(parsedData),
+      });
+    }
 
+    console.log("Inserting into email_queue");
     await insertInboundEmailQueueRow(
       {
         rawFrom,
@@ -185,9 +227,12 @@ export async function emailHandler(
       },
       env,
     );
+    console.log("Insert complete");
   } catch (err) {
+    console.error("Email handler error", err);
     try {
       const from = envelopeFrom(message) ?? "(unknown)";
+      console.log("Inserting into email_queue");
       await insertInboundEmailQueueRow(
         {
           rawFrom: from,
@@ -198,7 +243,9 @@ export async function emailHandler(
         },
         env,
       );
-    } catch {
+      console.log("Insert complete");
+    } catch (error) {
+      console.error("Email handler error", error);
       /* last-resort: do not propagate */
     }
   }
