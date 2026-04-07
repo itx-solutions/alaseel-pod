@@ -1,6 +1,22 @@
+import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
-import { ensureUserRecord } from "@/lib/auth";
+import { DriverEffects } from "@/components/driver/driver-effects";
 import { DriverShell } from "@/components/driver/driver-shell";
+import { OfflineIndicator } from "@/components/driver/offline-indicator";
+import { ensureUserRecord } from "@/lib/auth";
+
+export const metadata: Metadata = {
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Mazati POD",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#51836D",
+};
 
 export default async function DriverLayout({
   children,
@@ -11,5 +27,11 @@ export default async function DriverLayout({
   if (user.role !== "driver") {
     redirect("/dashboard");
   }
-  return <DriverShell>{children}</DriverShell>;
+  return (
+    <>
+      <DriverEffects />
+      <OfflineIndicator />
+      <DriverShell>{children}</DriverShell>
+    </>
+  );
 }

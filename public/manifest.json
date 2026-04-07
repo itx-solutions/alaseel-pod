@@ -1,0 +1,15 @@
+{
+  "name": "Mazati POD",
+  "short_name": "Mazati POD",
+  "description": "Proof of delivery for Mazati drivers",
+  "start_url": "/driver",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#51836D",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any"
+    }
+  ]
+}
