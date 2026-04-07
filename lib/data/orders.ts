@@ -13,6 +13,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { deliveries, orders, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { countPendingShopifyQueue } from "@/lib/data/shopify-queue";
 import {
   countPodsSubmittedTodayUtc,
   getPodSummaryForOrderDelivery,
@@ -233,6 +234,7 @@ export async function getDashboardStatsData(): Promise<DashboardStatsResponse> {
     .where(eq(orders.status, "pending"));
 
   const pods_today = await countPodsSubmittedTodayUtc();
+  const shopify_pending = await countPendingShopifyQueue();
 
   return {
     total_today: Number(totalRow?.total ?? 0),
@@ -240,6 +242,7 @@ export async function getDashboardStatsData(): Promise<DashboardStatsResponse> {
     in_transit: Number(inTransitRow?.total ?? 0),
     pending_assignment: Number(pendingRow?.total ?? 0),
     pods_today,
+    shopify_pending,
   };
 }
 
@@ -426,7 +429,8 @@ export async function updateOrderData(
   if (
     existing.status === "in_transit" ||
     existing.status === "completed" ||
-    existing.status === "attempted"
+    existing.status === "attempted" ||
+    existing.status === "cancelled"
   ) {
     throw new Error("NOT_EDITABLE");
   }
@@ -466,6 +470,7 @@ export async function assignDriverData(
     .limit(1);
 
   if (!existing) return null;
+  if (existing.status === "cancelled") return null;
 
   const [delRow] = await db
     .select()

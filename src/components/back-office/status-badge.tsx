@@ -7,6 +7,7 @@ const STATUS_CLASSES: Record<OrderStatus | DeliveryStatus, string> = {
   in_transit: "bg-amber-100 text-amber-700",
   completed: "bg-emerald-100 text-emerald-700",
   attempted: "bg-orange-100 text-orange-700",
+  cancelled: "bg-neutral-100 text-neutral-600",
 };
 
 const STATUS_LABEL: Record<OrderStatus | DeliveryStatus, string> = {
@@ -15,6 +16,7 @@ const STATUS_LABEL: Record<OrderStatus | DeliveryStatus, string> = {
   in_transit: "In transit",
   completed: "Completed",
   attempted: "Attempted",
+  cancelled: "Cancelled",
 };
 
 export function StatusBadge({

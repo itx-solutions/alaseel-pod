@@ -41,9 +41,11 @@ function isOrderEditable(status: OrderDetailResponse["order"]["status"]) {
 export function OrderDetailClient({
   initial,
   locked,
+  showShopifyApprovedBanner,
 }: {
   initial: OrderDetailResponse;
   locked: boolean;
+  showShopifyApprovedBanner?: boolean;
 }) {
   const router = useRouter();
   const [data, setData] = useState(initial);
@@ -98,6 +100,14 @@ export function OrderDetailClient({
 
   return (
     <div className="space-y-8">
+      {showShopifyApprovedBanner ? (
+        <div
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          role="status"
+        >
+          Delivery order created from Shopify queue.
+        </div>
+      ) : null}
       {locked ? (
         <div
           className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
@@ -148,7 +158,22 @@ export function OrderDetailClient({
             </div>
             <div>
               <dt className="text-gray-500">Source</dt>
-              <dd className="font-medium text-gray-900">{order.source}</dd>
+              <dd className="font-medium text-gray-900">
+                {order.source === "shopify" ? (
+                  <span
+                    className="inline-flex rounded border px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      borderColor: `${PRIMARY}40`,
+                      backgroundColor: `${PRIMARY}14`,
+                      color: PRIMARY,
+                    }}
+                  >
+                    Shopify
+                  </span>
+                ) : (
+                  <span className="capitalize">{order.source}</span>
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-gray-500">Phone</dt>
@@ -184,7 +209,14 @@ export function OrderDetailClient({
               ) : (
                 order.items.map((item, idx) => (
                   <li key={idx} className="flex justify-between gap-4 py-2">
-                    <span className="text-gray-900">{item.name}</span>
+                    <span className="text-gray-900">
+                      {item.name}
+                      {item.variant_title ? (
+                        <span className="mt-0.5 block text-xs text-gray-500">
+                          {item.variant_title}
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="tabular-nums text-gray-600">
                       ×{item.quantity}
                     </span>

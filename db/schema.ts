@@ -23,6 +23,14 @@ export const orderStatusEnum = pgEnum("order_status", [
   "in_transit",
   "completed",
   "attempted",
+  "cancelled",
+]);
+
+export const shopifyQueueStatusEnum = pgEnum("shopify_queue_status", [
+  "pending_review",
+  "approved",
+  "rejected",
+  "cancelled",
 ]);
 
 export const deliveryStatusEnum = pgEnum("delivery_status", [
@@ -62,7 +70,14 @@ export const orders = pgTable("orders", {
   deliveryAddressLat: numeric("delivery_address_lat", { precision: 10, scale: 7 }),
   deliveryAddressLng: numeric("delivery_address_lng", { precision: 10, scale: 7 }),
   items: jsonb("items")
-    .$type<Array<{ name: string; quantity: number; notes?: string }>>()
+    .$type<
+      Array<{
+        name: string;
+        quantity: number;
+        notes?: string;
+        variant_title?: string | null;
+      }>
+    >()
     .notNull(),
   specialInstructions: text("special_instructions"),
   status: orderStatusEnum("status").notNull(),
@@ -118,4 +133,32 @@ export const emailQueue = pgTable("email_queue", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   reviewedBy: uuid("reviewed_by").references(() => users.id),
+});
+
+export const shopifyQueue = pgTable("shopify_queue", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  shopifyOrderId: text("shopify_order_id").notNull().unique(),
+  shopifyOrderNumber: text("shopify_order_number").notNull(),
+  rawPayload: jsonb("raw_payload").$type<Record<string, unknown>>().notNull(),
+  recipientName: text("recipient_name").notNull(),
+  recipientPhone: text("recipient_phone"),
+  recipientEmail: text("recipient_email"),
+  deliveryAddress: text("delivery_address").notNull(),
+  items: jsonb("items")
+    .$type<
+      Array<{
+        name: string;
+        quantity: number;
+        variant_title?: string | null;
+      }>
+    >()
+    .notNull(),
+  orderTotal: text("order_total"),
+  status: shopifyQueueStatusEnum("status").notNull(),
+  notes: text("notes"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewedBy: uuid("reviewed_by").references(() => users.id),
+  createdOrderId: uuid("created_order_id").references(() => orders.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

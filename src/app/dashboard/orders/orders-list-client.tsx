@@ -26,6 +26,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "in_transit", label: "In transit" },
   { value: "completed", label: "Completed" },
   { value: "attempted", label: "Attempted" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 function buildQuery(page: number, search: string, status: string): string {

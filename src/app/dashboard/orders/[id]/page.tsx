@@ -7,7 +7,7 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ locked?: string }>;
+  searchParams: Promise<{ locked?: string; shopify?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -15,6 +15,10 @@ export default async function OrderDetailPage({
   if (!data) notFound();
 
   return (
-    <OrderDetailClient initial={data} locked={sp.locked === "1"} />
+    <OrderDetailClient
+      initial={data}
+      locked={sp.locked === "1"}
+      showShopifyApprovedBanner={sp.shopify === "approved"}
+    />
   );
 }

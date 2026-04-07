@@ -8,7 +8,8 @@ export type OrderStatus =
   | "assigned"
   | "in_transit"
   | "completed"
-  | "attempted";
+  | "attempted"
+  | "cancelled";
 
 export type OrderSource = "manual" | "shopify" | "email";
 
@@ -25,6 +26,7 @@ export type OrderItemLine = {
   name: string;
   quantity: number;
   notes?: string;
+  variant_title?: string | null;
 };
 
 /** GET /api/orders — each row */
@@ -145,6 +147,7 @@ export type DashboardStatsResponse = {
   in_transit: number;
   pending_assignment: number;
   pods_today: number;
+  shopify_pending: number;
 };
 
 /** Helper: short display id for tables */

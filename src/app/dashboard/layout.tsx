@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
-import { ensureUserRecord } from "@/lib/auth";
 import { DashboardShell } from "@/components/back-office/dashboard-shell";
+import { ensureUserRecord } from "@/lib/auth";
+import { countPendingShopifyQueue } from "@/lib/data/shopify-queue";
 
 export default async function DashboardLayout({
   children,
@@ -11,5 +12,10 @@ export default async function DashboardLayout({
   if (user.role !== "back_office") {
     redirect("/driver");
   }
-  return <DashboardShell>{children}</DashboardShell>;
+  const shopifyPendingCount = await countPendingShopifyQueue();
+  return (
+    <DashboardShell shopifyPendingCount={shopifyPendingCount}>
+      {children}
+    </DashboardShell>
+  );
 }
