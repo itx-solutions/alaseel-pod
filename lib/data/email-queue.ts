@@ -1,3 +1,4 @@
+import { neon } from "@neondatabase/serverless";
 import {
   and,
   count,
@@ -5,12 +6,11 @@ import {
   eq,
   ilike,
   or,
-  sql,
   type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { emailQueue, orders, users } from "@/db/schema";
-import { getDb, getDbFromWorkerEnv, type HyperdriveEnv } from "@/lib/db";
+import { getDatabaseUrl, getDb, type HyperdriveEnv } from "@/lib/db";
 import type { OrderItemLine } from "@/lib/types/order";
 import type {
   EmailQueueDetailDto,
@@ -91,6 +91,20 @@ function confidenceFromRow(
   return null;
 }
 
+function getNeonConnectionString(workerEnv?: HyperdriveEnv): string {
+  if (workerEnv) {
+    const url =
+      workerEnv.HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error(
+        "HYPERDRIVE.connectionString or DATABASE_URL is required for Worker DB access.",
+      );
+    }
+    return url;
+  }
+  return getDatabaseUrl();
+}
+
 export async function insertInboundEmailQueueRow(
   input: {
     rawFrom: string;
@@ -100,7 +114,6 @@ export async function insertInboundEmailQueueRow(
   },
   workerEnv?: HyperdriveEnv,
 ): Promise<void> {
-  const db = workerEnv ? getDbFromWorkerEnv(workerEnv) : getDb();
   const raw = input.parsedData as unknown;
   const parsedDataForDb: Record<string, unknown> | null =
     raw == null || raw === ""
@@ -109,20 +122,21 @@ export async function insertInboundEmailQueueRow(
         ? ({ ...raw } as Record<string, unknown>)
         : null;
 
-  // Drizzle's insert emits every table column with `default` for omitted fields; neon-http on
-  // Cloudflare Workers can mis-bind parameters for that shape. Insert only the five columns we
-  // set and let Postgres apply defaults for id / created_at / reviewed_*.
+  // Drizzle's insert + `db.execute` still go through layers that break on Workers with
+  // Hyperdrive. Neon's tagged-template API (`neon(url)`) is the supported HTTP query path;
+  // bind only four params and cast status as a typed literal.
   const jsonText = JSON.stringify(parsedDataForDb ?? {});
-  await db.execute(sql`
+  const sqlNeon = neon(getNeonConnectionString(workerEnv));
+  await sqlNeon`
     INSERT INTO email_queue (raw_from, raw_subject, raw_body, parsed_data, status)
     VALUES (
       ${input.rawFrom},
       ${input.rawSubject},
       ${input.rawBody},
-      CAST(${jsonText} AS jsonb),
-      'pending_review'
+      ${jsonText}::jsonb,
+      'pending_review'::email_queue_status
     )
-  `);
+  `;
 }
 
 function buildListWhere(opts: {

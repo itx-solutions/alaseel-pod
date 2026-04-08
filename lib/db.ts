@@ -13,7 +13,7 @@ import * as schema from "@/db/schema";
  * request from being used in another ("Cannot perform I/O on behalf of a different
  * request"). Always build a fresh client per `getDb()` call.
  */
-function getDatabaseUrl(): string {
+export function getDatabaseUrl(): string {
   const direct = process.env.DATABASE_URL;
   if (direct) return direct;
   try {
