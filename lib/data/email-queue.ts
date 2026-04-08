@@ -5,6 +5,7 @@ import {
   eq,
   ilike,
   or,
+  sql,
   type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -111,7 +112,8 @@ export async function insertInboundEmailQueueRow(
     rawFrom: input.rawFrom,
     rawSubject: input.rawSubject,
     rawBody: input.rawBody,
-    parsedData: parsedDataForDb,
+    parsedData:
+      parsedDataForDb === null ? sql`NULL` : parsedDataForDb,
     status: "pending_review",
   });
 }
