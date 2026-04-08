@@ -5,6 +5,7 @@ import {
   eq,
   ilike,
   or,
+  sql,
   type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -108,13 +109,20 @@ export async function insertInboundEmailQueueRow(
         ? ({ ...raw } as Record<string, unknown>)
         : null;
 
-  await db.insert(emailQueue).values({
-    rawFrom: input.rawFrom,
-    rawSubject: input.rawSubject,
-    rawBody: input.rawBody,
-    parsedData: parsedDataForDb ?? {},
-    status: "pending_review" as const,
-  });
+  // Drizzle's insert emits every table column with `default` for omitted fields; neon-http on
+  // Cloudflare Workers can mis-bind parameters for that shape. Insert only the five columns we
+  // set and let Postgres apply defaults for id / created_at / reviewed_*.
+  const jsonText = JSON.stringify(parsedDataForDb ?? {});
+  await db.execute(sql`
+    INSERT INTO email_queue (raw_from, raw_subject, raw_body, parsed_data, status)
+    VALUES (
+      ${input.rawFrom},
+      ${input.rawSubject},
+      ${input.rawBody},
+      CAST(${jsonText} AS jsonb),
+      'pending_review'
+    )
+  `);
 }
 
 function buildListWhere(opts: {
