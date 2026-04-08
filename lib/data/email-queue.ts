@@ -108,14 +108,38 @@ export async function insertInboundEmailQueueRow(
       : typeof raw === "object"
         ? ({ ...raw } as Record<string, unknown>)
         : null;
-  await db.insert(emailQueue).values({
+  // Only these columns: omit id/createdAt (DB defaults), reviewedAt/reviewedBy (nullable, no DB default — Postgres stores NULL when omitted).
+  const insertRow = {
     rawFrom: input.rawFrom,
     rawSubject: input.rawSubject,
     rawBody: input.rawBody,
     parsedData:
       parsedDataForDb === null ? sql`NULL` : parsedDataForDb,
-    status: "pending_review",
-  });
+    // neon-http: bind enum as `text::email_queue_status` so Postgres accepts the cast
+    status: sql`${"pending_review"}::${sql.raw("email_queue_status")}`,
+  };
+  try {
+    await db.insert(emailQueue).values(insertRow);
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>;
+    console.error(
+      "Insert failed - postgres error:",
+      JSON.stringify(
+        {
+          message: e?.message,
+          code: e?.code,
+          detail: e?.detail,
+          hint: e?.hint,
+          constraint: e?.constraint,
+          severity: e?.severity,
+          routine: e?.routine,
+        },
+        null,
+        2,
+      ),
+    );
+    throw err;
+  }
 }
 
 function buildListWhere(opts: {
