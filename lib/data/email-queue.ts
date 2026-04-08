@@ -1,3 +1,5 @@
+import { neon } from "@neondatabase/serverless";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   and,
   count,
@@ -9,7 +11,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { emailQueue, orders, users } from "@/db/schema";
-import { getDb, getDbFromWorkerEnv, type HyperdriveEnv } from "@/lib/db";
+import { getDb, type HyperdriveEnv } from "@/lib/db";
 import type { OrderItemLine } from "@/lib/types/order";
 import type {
   EmailQueueDetailDto,
@@ -90,6 +92,37 @@ function confidenceFromRow(
   return null;
 }
 
+/**
+ * Same resolution order as `getDatabaseUrl` / `getDbFromWorkerEnv` in `lib/db.ts`
+ * (DATABASE_URL → Cloudflare `HYPERDRIVE`, or Worker env binding).
+ */
+function getEmailQueueInsertConnectionString(workerEnv?: HyperdriveEnv): string {
+  if (workerEnv) {
+    const url =
+      workerEnv.HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error(
+        "HYPERDRIVE.connectionString or DATABASE_URL is required for Worker DB access.",
+      );
+    }
+    return url;
+  }
+  const direct = process.env.DATABASE_URL;
+  if (direct) return direct;
+  try {
+    const { env } = getCloudflareContext({ async: false });
+    const hyperdrive = (env as unknown as Record<string, unknown>).HYPERDRIVE as
+      | { connectionString?: string }
+      | undefined;
+    if (hyperdrive?.connectionString) return hyperdrive.connectionString;
+  } catch {
+    // Not running inside a Cloudflare Worker request (e.g. local Node, build).
+  }
+  throw new Error(
+    "DATABASE_URL is not set. For Workers, bind Hyperdrive as HYPERDRIVE or set DATABASE_URL.",
+  );
+}
+
 export async function insertInboundEmailQueueRow(
   input: {
     rawFrom: string;
@@ -99,7 +132,6 @@ export async function insertInboundEmailQueueRow(
   },
   workerEnv?: HyperdriveEnv,
 ): Promise<void> {
-  const db = workerEnv ? getDbFromWorkerEnv(workerEnv) : getDb();
   const raw = input.parsedData as unknown;
   const parsedDataForDb: Record<string, unknown> | null =
     raw == null || raw === ""
@@ -107,15 +139,21 @@ export async function insertInboundEmailQueueRow(
       : typeof raw === "object"
         ? ({ ...raw } as Record<string, unknown>)
         : null;
-  // Only these columns: omit id/createdAt (DB defaults), reviewedAt/reviewedBy (nullable, no DB default — Postgres stores NULL when omitted).
-  const insertRow = {
-    rawFrom: input.rawFrom,
-    rawSubject: input.rawSubject,
-    rawBody: input.rawBody,
-    status: "pending_review" as const,
-    ...(parsedDataForDb !== null && { parsedData: parsedDataForDb }),
-  };
-  await db.insert(emailQueue).values(insertRow);
+
+  // Drizzle's insert builder + neon-http on Cloudflare Workers mis-counts parameters when
+  // the generated SQL uses DEFAULT for omitted columns. Raw `neon` SQL avoids DEFAULT entirely.
+  const connectionString = getEmailQueueInsertConnectionString(workerEnv);
+  const sqlClient = neon(connectionString);
+  await sqlClient`
+    INSERT INTO email_queue (raw_from, raw_subject, raw_body, parsed_data, status)
+    VALUES (
+      ${input.rawFrom},
+      ${input.rawSubject},
+      ${input.rawBody},
+      ${parsedDataForDb === null ? null : JSON.stringify(parsedDataForDb)},
+      ${"pending_review"}
+    )
+  `;
 }
 
 function buildListWhere(opts: {
