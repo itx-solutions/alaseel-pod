@@ -167,7 +167,7 @@ export async function emailHandler(
                   rawFrom,
                   rawSubject: subjectWithPdf,
                   rawBody: displayBody,
-                  parsedData,
+                  parsedData: parsedData ?? null,
                 },
                 env,
               );
@@ -195,7 +195,7 @@ export async function emailHandler(
               rawFrom,
               rawSubject,
               rawBody,
-              parsedData: withSource,
+              parsedData: withSource ?? null,
             },
             env,
           );
@@ -223,7 +223,7 @@ export async function emailHandler(
         rawFrom,
         rawSubject,
         rawBody,
-        parsedData,
+        parsedData: parsedData ?? null,
       },
       env,
     );
