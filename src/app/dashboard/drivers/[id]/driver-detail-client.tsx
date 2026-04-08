@@ -2,10 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DriverStats } from "@/components/back-office/driver-stats";
 import { StatusBadge } from "@/components/back-office/status-badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -14,9 +23,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { DriverDetailView } from "@/lib/types/driver";
+import type {
+  DriverDetailView,
+  DriverWithVehicleResponse,
+} from "@/lib/types/driver";
+import type { VehicleDto, VehiclesListResponse } from "@/lib/types/vehicle";
 import { formatOrderNumber } from "@/lib/types/order";
 import { cn } from "@/lib/utils";
+
+const MAZATI = "#51836D";
+
+function formatAssignedVehicleLine(v: {
+  year: number | null;
+  make: string;
+  model: string;
+  colour: string;
+  rego: string;
+}): string {
+  const y = v.year != null ? `${v.year} ` : "";
+  return `${y}${v.make} ${v.model} — ${v.colour} — ${v.rego}`;
+}
+
+function vehicleOptionLabel(v: VehicleDto): string {
+  return `${v.make} ${v.model} — ${v.rego}`;
+}
 
 function ActiveBadge({ active }: { active: boolean }) {
   return (
@@ -41,10 +71,48 @@ export function DriverDetailClient({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [localActive, setLocalActive] = useState(initial.isActive);
+  const [localPhone, setLocalPhone] = useState(initial.phone);
+  const [localVehicle, setLocalVehicle] = useState(initial.vehicle);
+
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [phoneInput, setPhoneInput] = useState(initial.phone ?? "");
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const [vehiclesList, setVehiclesList] = useState<VehicleDto[]>([]);
+  const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [vehicleBusy, setVehicleBusy] = useState(false);
 
   useEffect(() => {
     setLocalActive(initial.isActive);
   }, [initial.isActive]);
+
+  useEffect(() => {
+    setLocalPhone(initial.phone);
+    setLocalVehicle(initial.vehicle);
+    if (!editProfileOpen) setPhoneInput(initial.phone ?? "");
+  }, [initial.phone, initial.vehicle, editProfileOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/vehicles", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: unknown) => {
+        const data = json as VehiclesListResponse | null;
+        if (!cancelled && data?.vehicles) {
+          setVehiclesList(data.vehicles.filter((v) => v.isActive));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeVehicleOptions = useMemo(
+    () => vehiclesList.filter((v) => v.isActive),
+    [vehiclesList],
+  );
 
   async function patchDeactivate() {
     setPending(true);
@@ -94,6 +162,57 @@ export function DriverDetailClient({
     void patchDeactivate();
   }
 
+  async function saveProfile() {
+    setProfileSaving(true);
+    try {
+      const res = await fetch(`/api/drivers/${initial.id}/profile`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: phoneInput.trim() === "" ? null : phoneInput.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(
+          typeof err.error === "string" ? err.error : `Error ${res.status}`,
+        );
+      }
+      const user = (await res.json()) as { phone: string | null };
+      setLocalPhone(user.phone);
+      setEditProfileOpen(false);
+      router.refresh();
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function patchVehicle(vehicleId: string | null) {
+    setVehicleBusy(true);
+    try {
+      const res = await fetch(`/api/drivers/${initial.id}/vehicle`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vehicleId }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(
+          typeof err.error === "string" ? err.error : `Error ${res.status}`,
+        );
+      }
+      const data = (await res.json()) as DriverWithVehicleResponse;
+      setLocalVehicle(data.vehicle);
+      setVehiclePickerOpen(false);
+      setSelectedVehicleId("");
+      router.refresh();
+    } finally {
+      setVehicleBusy(false);
+    }
+  }
+
   const created = new Date(initial.createdAt).toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -117,7 +236,20 @@ export function DriverDetailClient({
             <ActiveBadge active={localActive} />
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {!editProfileOpen ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPhoneInput(localPhone ?? "");
+                setEditProfileOpen(true);
+              }}
+            >
+              Edit profile
+            </Button>
+          ) : null}
           {localActive ? (
             <Button
               type="button"
@@ -144,6 +276,41 @@ export function DriverDetailClient({
         </div>
       </div>
 
+      {editProfileOpen ? (
+        <div className="max-w-md rounded-xl border border-gray-200 bg-white p-4">
+          <Label htmlFor="driver-phone">Phone number</Label>
+          <Input
+            id="driver-phone"
+            type="tel"
+            className="mt-2 bg-white text-base"
+            value={phoneInput}
+            onChange={(e) => setPhoneInput(e.target.value)}
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={profileSaving}
+              onClick={() => void saveProfile()}
+              style={{ backgroundColor: MAZATI }}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {profileSaving ? "Saving…" : "Save changes"}
+            </button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={profileSaving}
+              onClick={() => {
+                setEditProfileOpen(false);
+                setPhoneInput(localPhone ?? "");
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <h2 className="text-base font-semibold text-gray-900">Details</h2>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
@@ -154,6 +321,12 @@ export function DriverDetailClient({
           <div>
             <dt className="text-gray-500">Email</dt>
             <dd className="font-medium text-gray-900">{initial.email}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Phone</dt>
+            <dd className="font-medium text-gray-900">
+              {localPhone?.trim() ? localPhone : "—"}
+            </dd>
           </div>
           <div>
             <dt className="text-gray-500">Account created</dt>
@@ -175,6 +348,101 @@ export function DriverDetailClient({
             <DriverStats stats={initial.stats} />
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <h2 className="text-base font-semibold text-gray-900">Vehicle</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          {localVehicle
+            ? formatAssignedVehicleLine(localVehicle)
+            : "No vehicle assigned"}
+        </p>
+        {!vehiclePickerOpen ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {localVehicle ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={vehicleBusy}
+                  onClick={() => {
+                    setSelectedVehicleId(localVehicle.id);
+                    setVehiclePickerOpen(true);
+                  }}
+                >
+                  Change vehicle
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={vehicleBusy}
+                  className="border-gray-300"
+                  onClick={() => void patchVehicle(null)}
+                >
+                  Unassign
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={vehicleBusy}
+                onClick={() => {
+                  setSelectedVehicleId("");
+                  setVehiclePickerOpen(true);
+                }}
+              >
+                Assign vehicle
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            <div className="space-y-2">
+              <Label>Select vehicle</Label>
+              <Select
+                value={selectedVehicleId || undefined}
+                onValueChange={setSelectedVehicleId}
+              >
+                <SelectTrigger className="max-w-md bg-white">
+                  <SelectValue placeholder="Choose a vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeVehicleOptions.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {vehicleOptionLabel(v)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={vehicleBusy || !selectedVehicleId}
+                onClick={() => void patchVehicle(selectedVehicleId)}
+                style={{ backgroundColor: MAZATI }}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Confirm
+              </button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={vehicleBusy}
+                onClick={() => {
+                  setVehiclePickerOpen(false);
+                  setSelectedVehicleId("");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { CheckCircle2, ListOrdered } from "lucide-react";
+import { CheckCircle2, ListOrdered, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const onRun = pathname === "/driver" || pathname === "/driver/";
   const onCompleted = pathname.startsWith("/driver/completed");
+  const onProfile = pathname.startsWith("/driver/profile");
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
@@ -48,6 +49,19 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
           <CheckCircle2 className="size-6 shrink-0 text-gray-700" aria-hidden />
           <span className="text-center text-xs font-medium leading-tight">
             Completed
+          </span>
+        </Link>
+        <Link
+          href="/driver/profile"
+          className={cn(
+            "flex min-h-12 min-w-12 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-gray-600 transition-colors",
+            onProfile && "bg-gray-100 text-gray-900",
+          )}
+          style={onProfile ? { boxShadow: `inset 0 0 0 1px #51836D` } : undefined}
+        >
+          <User className="size-6 shrink-0 text-gray-700" aria-hidden />
+          <span className="text-center text-xs font-medium leading-tight">
+            Profile
           </span>
         </Link>
       </nav>

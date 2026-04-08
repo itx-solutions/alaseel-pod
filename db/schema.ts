@@ -49,12 +49,27 @@ export const emailQueueStatusEnum = pgEnum("email_queue_status", [
   "rejected",
 ]);
 
+export const vehicles = pgTable("vehicles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  make: text("make").notNull(),
+  model: text("model").notNull(),
+  colour: text("colour").notNull(),
+  rego: text("rego").notNull().unique(),
+  year: integer("year"),
+  notes: text("notes"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   clerkId: text("clerk_id").notNull().unique(),
   role: userRoleEnum("role").notNull(),
   name: text("name").notNull(),
   email: text("email").notNull(),
+  phone: text("phone"),
+  vehicleId: uuid("vehicle_id").references(() => vehicles.id, { onDelete: "set null" }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -172,19 +187,6 @@ export const shopifyQueue = pgTable("shopify_queue", {
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   reviewedBy: uuid("reviewed_by").references(() => users.id),
   createdOrderId: uuid("created_order_id").references(() => orders.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const vehicles = pgTable("vehicles", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  make: text("make").notNull(),
-  model: text("model").notNull(),
-  colour: text("colour").notNull(),
-  rego: text("rego").notNull().unique(),
-  year: integer("year"),
-  notes: text("notes"),
-  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -72,6 +72,24 @@ export async function verifyShopifyWebhook(
   return timingSafeEqualBytes(expBytes, recvBytes);
 }
 
+/** Date segment in order tags, e.g. "10 Apr 2026" */
+const TAGS_DATE_PATTERN = /\d{1,2}\s+\w+\s+\d{4}/;
+/** Time window in tags, e.g. "9 AM - 5 PM" */
+const TAGS_TIME_PATTERN =
+  /\d{1,2}\s*(?:AM|PM)\s*-\s*\d{1,2}\s*(?:AM|PM)/i;
+
+function extractDeliveryDateFromTags(tags: string | null | undefined): string | null {
+  if (tags == null || !String(tags).trim()) return null;
+  const m = String(tags).match(TAGS_DATE_PATTERN);
+  return m ? m[0].trim() : null;
+}
+
+function extractDeliveryTimeFromTags(tags: string | null | undefined): string | null {
+  if (tags == null || !String(tags).trim()) return null;
+  const m = String(tags).match(TAGS_TIME_PATTERN);
+  return m ? m[0].trim() : null;
+}
+
 /** Exported for shopify-queue insert + tests */
 export type MappedShopifyQueueInsert = {
   shopify_order_id: string;
@@ -125,19 +143,24 @@ export function mapShopifyOrderToQueueEntry(
     variant_title: item.variant_title,
   }));
 
-  const dueDate =
+  const dueDateFromNotes =
     payload.note_attributes?.find(
       (a) =>
         a.name.toLowerCase().includes("due date") ||
         a.name.toLowerCase().includes("delivery date"),
     )?.value ?? null;
 
-  const dueTime =
+  const dueTimeFromNotes =
     payload.note_attributes?.find(
       (a) =>
         a.name.toLowerCase().includes("due time") ||
         a.name.toLowerCase().includes("delivery time"),
     )?.value ?? null;
+
+  const dueDate =
+    dueDateFromNotes ?? extractDeliveryDateFromTags(payload.tags);
+  const dueTime =
+    dueTimeFromNotes ?? extractDeliveryTimeFromTags(payload.tags);
 
   const notes =
     [

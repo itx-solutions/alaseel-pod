@@ -30,6 +30,8 @@ export interface ShopifyOrderPayload {
     name: string;
     value: string;
   }> | null;
+  /** Comma-separated, e.g. "10 Apr 2026, 9 AM - 5 PM, AAFS, Local Delivery" */
+  tags?: string | null;
   cancel_reason: string | null;
   cancelled_at: string | null;
 }

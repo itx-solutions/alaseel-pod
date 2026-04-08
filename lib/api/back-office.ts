@@ -25,3 +25,7 @@ export function jsonNotFound(): Response {
 export function jsonConflict(message: string): Response {
   return Response.json({ error: message }, { status: 409 });
 }
+
+export function jsonUnprocessableEntity(message: string): Response {
+  return Response.json({ error: message }, { status: 422 });
+}

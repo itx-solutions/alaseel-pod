@@ -23,15 +23,47 @@ export type DriversListApiResponse = {
   drivers: DriverListItemDto[];
 };
 
-/** PATCH deactivate/reactivate — updated user row (safe fields). */
+/** PATCH deactivate/reactivate / profile — updated user row (safe fields). */
 export type DriverUserRecordDto = {
   id: string;
   clerkId: string;
   role: "driver";
   name: string;
   email: string;
+  phone: string | null;
+  vehicleId: string | null;
   isActive: boolean;
   createdAt: string;
+};
+
+export type DriverVehicleSummaryDto = {
+  id: string;
+  make: string;
+  model: string;
+  colour: string;
+  rego: string;
+  year: number | null;
+};
+
+/** PATCH /api/drivers/[id]/vehicle — response */
+export type DriverWithVehicleResponse = DriverUserRecordDto & {
+  vehicle: DriverVehicleSummaryDto | null;
+};
+
+/** GET /api/driver/profile */
+export type DriverOwnProfileResponse = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  isActive: boolean;
+  vehicle: {
+    make: string;
+    model: string;
+    colour: string;
+    rego: string;
+    year: number | null;
+  } | null;
 };
 
 /** Server-side driver detail + recent deliveries */
@@ -49,8 +81,10 @@ export type DriverDetailView = {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   isActive: boolean;
   createdAt: string;
   stats: DriverDeliveryStats;
   recentDeliveries: DriverRecentDeliveryRow[];
+  vehicle: DriverVehicleSummaryDto | null;
 };
