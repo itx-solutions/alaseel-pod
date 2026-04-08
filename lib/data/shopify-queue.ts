@@ -78,6 +78,7 @@ export async function insertShopifyQueueFromPaid(
     deliveryAddress: mapped.delivery_address,
     items: mapped.items,
     orderTotal: mapped.order_total,
+    notes: mapped.notes,
     status: "pending_review",
     updatedAt: new Date(),
   });
@@ -290,7 +291,7 @@ export async function approveShopifyQueueEntry(
       recipientEmail: q.recipientEmail,
       deliveryAddress: q.deliveryAddress,
       items: orderItems,
-      specialInstructions: null,
+      specialInstructions: q.notes?.trim() || null,
       status: "pending",
     })
     .returning({ id: orders.id });

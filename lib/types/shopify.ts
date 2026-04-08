@@ -26,6 +26,10 @@ export interface ShopifyOrderPayload {
     quantity: number;
     variant_title: string | null;
   }>;
+  note_attributes?: Array<{
+    name: string;
+    value: string;
+  }> | null;
   cancel_reason: string | null;
   cancelled_at: string | null;
 }

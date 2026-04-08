@@ -169,6 +169,17 @@ export function ShopifyQueueReviewClient({
                 {initial.delivery_address}
               </dd>
             </div>
+            {initial.notes &&
+            initial.status !== "rejected" ? (
+              <div
+                className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                role="region"
+                aria-label="Delivery window"
+              >
+                <p className="font-medium text-amber-800">Delivery window</p>
+                <p className="mt-1 whitespace-pre-wrap">{initial.notes}</p>
+              </div>
+            ) : null}
             <div>
               <dt className="text-gray-500">Order total</dt>
               <dd className="text-gray-900">{initial.order_total ?? "—"}</dd>

@@ -86,6 +86,7 @@ export type MappedShopifyQueueInsert = {
     variant_title?: string | null;
   }>;
   order_total: string | null;
+  notes: string | null;
   raw_payload: Record<string, unknown>;
 };
 
@@ -124,6 +125,28 @@ export function mapShopifyOrderToQueueEntry(
     variant_title: item.variant_title,
   }));
 
+  const dueDate =
+    payload.note_attributes?.find(
+      (a) =>
+        a.name.toLowerCase().includes("due date") ||
+        a.name.toLowerCase().includes("delivery date"),
+    )?.value ?? null;
+
+  const dueTime =
+    payload.note_attributes?.find(
+      (a) =>
+        a.name.toLowerCase().includes("due time") ||
+        a.name.toLowerCase().includes("delivery time"),
+    )?.value ?? null;
+
+  const notes =
+    [
+      dueDate ? `Delivery date: ${dueDate}` : null,
+      dueTime ? `Delivery time: ${dueTime}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ") || null;
+
   return {
     shopify_order_id: String(payload.id),
     shopify_order_number: `#${payload.order_number}`,
@@ -133,6 +156,7 @@ export function mapShopifyOrderToQueueEntry(
     delivery_address,
     items,
     order_total: payload.total_price ?? null,
+    notes,
     raw_payload: payload as unknown as Record<string, unknown>,
   };
 }
