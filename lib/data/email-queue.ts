@@ -1,5 +1,3 @@
-import { neon } from "@neondatabase/serverless";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   and,
   count,
@@ -11,20 +9,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { emailQueue, orders, users } from "@/db/schema";
-import { getDb, type HyperdriveEnv } from "@/lib/db";
-
-/** Same shape as `HyperdriveEnv` — Worker binding passed from `emailHandler`. */
-type WorkerEnv = HyperdriveEnv;
-
-function maskDatabaseUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    if (u.password) u.password = "***";
-    return u.toString();
-  } catch {
-    return url.replace(/:([^:@/]+)@/, ":***@");
-  }
-}
+import { getDb, getDbFromWorkerEnv, type HyperdriveEnv } from "@/lib/db";
 import type { OrderItemLine } from "@/lib/types/order";
 import type {
   EmailQueueDetailDto,
@@ -105,60 +90,6 @@ function confidenceFromRow(
   return null;
 }
 
-/**
- * Same resolution order as `getDatabaseUrl` / `getDbFromWorkerEnv` in `lib/db.ts`
- * (DATABASE_URL → Cloudflare `HYPERDRIVE`, or Worker env binding).
- */
-function getEmailQueueInsertConnectionString(workerEnv?: WorkerEnv): string {
-  if (workerEnv) {
-    const hyperdrive = workerEnv.HYPERDRIVE;
-    console.log("getEmailQueueInsertConnectionString: workerEnv path", {
-      hasHyperdrive: !!hyperdrive,
-      hasConnectionString: !!hyperdrive?.connectionString,
-    });
-    const cs = hyperdrive?.connectionString ?? process.env.DATABASE_URL;
-    if (!cs) {
-      throw new Error(
-        "HYPERDRIVE.connectionString or DATABASE_URL is required for Worker DB access.",
-      );
-    }
-    console.log("getEmailQueueInsertConnectionString: workerEnv path", {
-      maskedReturned: maskDatabaseUrl(cs),
-    });
-    return cs;
-  }
-  console.log(
-    "getEmailQueueInsertConnectionString: no workerEnv, using getDatabaseUrl()",
-  );
-  const direct = process.env.DATABASE_URL;
-  if (direct) {
-    console.log(
-      "getEmailQueueInsertConnectionString: path process.env.DATABASE_URL",
-      { maskedReturned: maskDatabaseUrl(direct) },
-    );
-    return direct;
-  }
-  try {
-    const { env } = getCloudflareContext({ async: false });
-    const hyperdrive = (env as unknown as Record<string, unknown>).HYPERDRIVE as
-      | { connectionString?: string }
-      | undefined;
-    if (hyperdrive?.connectionString) {
-      const cs = hyperdrive.connectionString;
-      console.log(
-        "getEmailQueueInsertConnectionString: path getCloudflareContext HYPERDRIVE",
-        { maskedReturned: maskDatabaseUrl(cs) },
-      );
-      return cs;
-    }
-  } catch {
-    // Not running inside a Cloudflare Worker request (e.g. local Node, build).
-  }
-  throw new Error(
-    "DATABASE_URL is not set. For Workers, bind Hyperdrive as HYPERDRIVE or set DATABASE_URL.",
-  );
-}
-
 export async function insertInboundEmailQueueRow(
   input: {
     rawFrom: string;
@@ -166,8 +97,9 @@ export async function insertInboundEmailQueueRow(
     rawBody: string;
     parsedData: ParsedEmailData | null;
   },
-  workerEnv?: WorkerEnv,
+  workerEnv?: HyperdriveEnv,
 ): Promise<void> {
+  const db = workerEnv ? getDbFromWorkerEnv(workerEnv) : getDb();
   const raw = input.parsedData as unknown;
   const parsedDataForDb: Record<string, unknown> | null =
     raw == null || raw === ""
@@ -176,20 +108,13 @@ export async function insertInboundEmailQueueRow(
         ? ({ ...raw } as Record<string, unknown>)
         : null;
 
-  // Drizzle's insert builder + neon-http on Cloudflare Workers mis-counts parameters when
-  // the generated SQL uses DEFAULT for omitted columns. Raw `neon` SQL avoids DEFAULT entirely.
-  const connectionString = getEmailQueueInsertConnectionString(workerEnv);
-  const sqlClient = neon(connectionString);
-  await sqlClient`
-    INSERT INTO email_queue (raw_from, raw_subject, raw_body, parsed_data, status)
-    VALUES (
-      ${input.rawFrom},
-      ${input.rawSubject},
-      ${input.rawBody},
-      ${parsedDataForDb === null ? null : JSON.stringify(parsedDataForDb)},
-      ${"pending_review"}
-    )
-  `;
+  await db.insert(emailQueue).values({
+    rawFrom: input.rawFrom,
+    rawSubject: input.rawSubject,
+    rawBody: input.rawBody,
+    parsedData: parsedDataForDb,
+    status: "pending_review" as const,
+  });
 }
 
 function buildListWhere(opts: {
