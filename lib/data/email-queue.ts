@@ -100,6 +100,12 @@ export async function insertInboundEmailQueueRow(
   workerEnv?: HyperdriveEnv,
 ): Promise<void> {
   const db = workerEnv ? getDbFromWorkerEnv(workerEnv) : getDb();
+  console.log(
+    "input.parsedData raw:",
+    JSON.stringify(input.parsedData),
+    "type:",
+    typeof input.parsedData,
+  );
   const raw = input.parsedData as unknown;
   const parsedDataForDb: Record<string, unknown> | null =
     raw == null || raw === ""
@@ -108,6 +114,12 @@ export async function insertInboundEmailQueueRow(
         ? ({ ...raw } as Record<string, unknown>)
         : null;
 
+  console.log(
+    "parsedDataForDb value:",
+    JSON.stringify(parsedDataForDb),
+    "type:",
+    typeof parsedDataForDb,
+  );
   await db.insert(emailQueue).values({
     rawFrom: input.rawFrom,
     rawSubject: input.rawSubject,
