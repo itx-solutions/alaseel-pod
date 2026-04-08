@@ -5,7 +5,6 @@ import {
   eq,
   ilike,
   or,
-  sql,
   type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -113,33 +112,10 @@ export async function insertInboundEmailQueueRow(
     rawFrom: input.rawFrom,
     rawSubject: input.rawSubject,
     rawBody: input.rawBody,
-    parsedData:
-      parsedDataForDb === null ? sql`NULL` : parsedDataForDb,
-    // neon-http: bind enum as `text::email_queue_status` so Postgres accepts the cast
-    status: sql`${"pending_review"}::${sql.raw("email_queue_status")}`,
+    status: "pending_review" as const,
+    ...(parsedDataForDb !== null && { parsedData: parsedDataForDb }),
   };
-  try {
-    await db.insert(emailQueue).values(insertRow);
-  } catch (err: unknown) {
-    const e = err as Record<string, unknown>;
-    console.error(
-      "Insert failed - postgres error:",
-      JSON.stringify(
-        {
-          message: e?.message,
-          code: e?.code,
-          detail: e?.detail,
-          hint: e?.hint,
-          constraint: e?.constraint,
-          severity: e?.severity,
-          routine: e?.routine,
-        },
-        null,
-        2,
-      ),
-    );
-    throw err;
-  }
+  await db.insert(emailQueue).values(insertRow);
 }
 
 function buildListWhere(opts: {
