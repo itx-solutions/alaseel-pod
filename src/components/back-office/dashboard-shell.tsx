@@ -3,6 +3,7 @@
 import { UserButton } from "@clerk/nextjs";
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   ClipboardList,
   LayoutDashboard,
   Mail,
@@ -48,6 +49,7 @@ const nav: NavItem[] = [
   },
   { href: "/dashboard/drivers", label: "Drivers", icon: Truck },
   { href: "/dashboard/pods", label: "POD Records", icon: ClipboardList },
+  { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
   {
     href: "/dashboard/email-queue",
     label: "Email Queue",
