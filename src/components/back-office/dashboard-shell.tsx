@@ -12,6 +12,7 @@ import {
   Settings,
   ShoppingBag,
   Truck,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -47,7 +48,8 @@ const nav: NavItem[] = [
     icon: ShoppingBag,
     shopifyBadge: true,
   },
-  { href: "/dashboard/drivers", label: "Drivers", icon: Truck },
+  { href: "/dashboard/drivers", label: "Drivers", icon: Users },
+  { href: "/dashboard/vehicles", label: "Vehicles", icon: Truck },
   { href: "/dashboard/pods", label: "POD Records", icon: ClipboardList },
   { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
   {

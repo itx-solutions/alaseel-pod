@@ -7,6 +7,7 @@ import {
   jsonb,
   pgEnum,
   numeric,
+  integer,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["back_office", "driver"]);
@@ -171,6 +172,19 @@ export const shopifyQueue = pgTable("shopify_queue", {
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   reviewedBy: uuid("reviewed_by").references(() => users.id),
   createdOrderId: uuid("created_order_id").references(() => orders.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const vehicles = pgTable("vehicles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  make: text("make").notNull(),
+  model: text("model").notNull(),
+  colour: text("colour").notNull(),
+  rego: text("rego").notNull().unique(),
+  year: integer("year"),
+  notes: text("notes"),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

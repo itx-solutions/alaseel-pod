@@ -21,3 +21,7 @@ export function jsonBadRequest(message: string): Response {
 export function jsonNotFound(): Response {
   return Response.json({ error: "Not found" }, { status: 404 });
 }
+
+export function jsonConflict(message: string): Response {
+  return Response.json({ error: message }, { status: 409 });
+}
