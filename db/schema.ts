@@ -128,7 +128,10 @@ export const emailQueue = pgTable("email_queue", {
   rawFrom: text("raw_from").notNull(),
   rawSubject: text("raw_subject").notNull(),
   rawBody: text("raw_body").notNull(),
-  parsedData: jsonb("parsed_data").$type<Record<string, unknown>>(),
+  parsedData: jsonb("parsed_data")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
   status: emailQueueStatusEnum("status").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),

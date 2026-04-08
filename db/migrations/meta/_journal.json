@@ -15,6 +15,13 @@
       "when": 1775592521561,
       "tag": "0001_happy_metal_master",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775626325668,
+      "tag": "0002_orange_madelyne_pryor",
+      "breakpoints": true
     }
   ]
 }
