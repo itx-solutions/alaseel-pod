@@ -32,9 +32,16 @@ export function getDatabaseUrl(): string {
 
 export type Database = NeonHttpDatabase<typeof schema>;
 
-/** Hyperdrive binding shape on Cloudflare Workers (email handler, etc.). */
+/**
+ * Worker / email-handler env. Hyperdrive is for wire-protocol drivers; `@neondatabase/serverless`
+ * `neon()` uses Neon's HTTP API and must use a direct Neon URL — see `getNeonConnectionString` in
+ * `lib/data/email-queue.ts`.
+ */
 export type HyperdriveEnv = {
   HYPERDRIVE?: { connectionString?: string };
+  /** Direct Neon URL for `neon()` in Email Worker (not the Hyperdrive proxy string). */
+  NEON_DATABASE_URL?: string;
+  DATABASE_URL?: string;
 };
 
 /**

@@ -93,14 +93,19 @@ function confidenceFromRow(
 
 function getNeonConnectionString(workerEnv?: HyperdriveEnv): string {
   if (workerEnv) {
-    const url =
-      workerEnv.HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL;
-    if (!url) {
+    // `neon()` from @neondatabase/serverless uses Neon's HTTP API. Hyperdrive's connectionString
+    // targets Cloudflare's proxy (wire path) and is not compatible — you get NeonDbError 530/1016.
+    const direct =
+      workerEnv.NEON_DATABASE_URL ??
+      workerEnv.DATABASE_URL ??
+      process.env.NEON_DATABASE_URL ??
+      process.env.DATABASE_URL;
+    if (!direct) {
       throw new Error(
-        "HYPERDRIVE.connectionString or DATABASE_URL is required for Worker DB access.",
+        "Email Worker: set NEON_DATABASE_URL (wrangler secret) or DATABASE_URL to your direct Neon connection string from the Neon dashboard. Do not use the Hyperdrive proxy URL with neon().",
       );
     }
-    return url;
+    return direct;
   }
   return getDatabaseUrl();
 }
@@ -122,9 +127,7 @@ export async function insertInboundEmailQueueRow(
         ? ({ ...raw } as Record<string, unknown>)
         : null;
 
-  // Drizzle's insert + `db.execute` still go through layers that break on Workers with
-  // Hyperdrive. Neon's tagged-template API (`neon(url)`) is the supported HTTP query path;
-  // bind only four params and cast status as a typed literal.
+  // Use Neon's tagged-template API with a direct Neon URL (see getNeonConnectionString).
   const jsonText = JSON.stringify(parsedDataForDb ?? {});
   const sqlNeon = neon(getNeonConnectionString(workerEnv));
   await sqlNeon`

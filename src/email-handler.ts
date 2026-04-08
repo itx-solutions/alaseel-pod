@@ -24,6 +24,8 @@ export type InboundEmailMessage = {
 type EmailHandlerEnv = {
   ANTHROPIC_API_KEY?: string;
   HYPERDRIVE?: { connectionString?: string };
+  NEON_DATABASE_URL?: string;
+  DATABASE_URL?: string;
 };
 
 function envelopeFrom(m: InboundEmailMessage): string | undefined {

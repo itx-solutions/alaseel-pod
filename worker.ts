@@ -9,6 +9,9 @@ import { default as handler } from "./.open-next/worker.js";
 type WorkerHandlerEnv = {
   ANTHROPIC_API_KEY?: string;
   HYPERDRIVE?: { connectionString?: string };
+  /** Direct Neon URL for `neon()` in email handler — not Hyperdrive (see lib/data/email-queue.ts). */
+  NEON_DATABASE_URL?: string;
+  DATABASE_URL?: string;
 };
 
 export default {
